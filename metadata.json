@@ -1,0 +1,6 @@
+{
+  "name": "Shadow Protocol: Red Cell",
+  "description": "Tactical mobile FPS offline game",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
