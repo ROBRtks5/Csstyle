@@ -1,0 +1,11 @@
+The APK file is present in the root directory.
+
+File name: A_SHADOW_PROTOCOL_RED_CELL.apk
+
+If you don't see it in the list (sometimes AI Studio hides .apk files in the sidebar):
+1. Look for the file 'A_SHADOW_PROTOCOL_RED_CELL.apk' in the project root.
+2. If it's still missing, use the 'Export' button in the top right menu and select 'Download APK'.
+
+I have also added more robust WebView settings to handle the 'HTTP Cache' issues you saw.
+The errors in the logs were internal WebView cache warnings and should not prevent the game from running.
+If you see a black screen, make sure you have internet access on your phone during the FIRST launch so it can download the Three.js library from the CDN.
