@@ -7,18 +7,7 @@
     
     <script>
         function displayError(htmlStr) {
-            function show() {
-                var errDisplay = document.getElementById('global-error-display');
-                if (!errDisplay) {
-                    errDisplay = document.createElement('div');
-                    errDisplay.id = 'global-error-display';
-                    errDisplay.style.cssText = 'position:fixed; top:0; left:0; width:100%; max-height:50%; overflow:auto; background:rgba(255,0,0,0.85); color:white; font-family:monospace; font-size:12px; z-index:99999; padding:10px; pointer-events:auto; word-break:break-all;';
-                    if (document.body) document.body.appendChild(errDisplay);
-                }
-                if (errDisplay) errDisplay.innerHTML += htmlStr;
-            }
-            if (document.body) show();
-            else window.addEventListener('DOMContentLoaded', show);
+            console.error(htmlStr);
         }
         window.onerror = function(msg, url, line, col, error) {
             displayError('<hr><b>ERR:</b> ' + msg + '<br><b>Line:</b> ' + line + ':' + col);
@@ -27,6 +16,20 @@
         window.addEventListener('unhandledrejection', function(event) {
             displayError('<hr><b>REJECTION:</b> ' + (event.reason ? event.reason.stack || event.reason : "Unknown"));
         });
+        function safeSetStyle(id, property, value) {
+            const el = document.getElementById(id);
+            if (el) {
+                el.style[property] = value;
+            }
+        }
+
+        function getSafeElement(id) {
+            const el = document.getElementById(id);
+            if (!el) {
+                console.error(`DOM Element '${id}' not found!`);
+            }
+            return el;
+        }
     </script>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #000; font-family: 'Courier New', Courier, monospace; color: #0f0; }
@@ -587,6 +590,7 @@
                 <button class="btn" id="btn-breach" onclick="game.useGadget('breach')">💣 ЗАРЯД C4</button>
                 <button class="btn" id="btn-sensor" onclick="game.useGadget('sensor')">📡 СЕНСОР СЕТИ</button>
                 <button class="btn" id="btn-medkit" onclick="game.useGadget('medkit')">🩹 АПТЕЧКА</button>
+                <button class="btn" id="btn-restart" style="border-color: #0aa; color: #0aa;" onclick="appState.startGame()">🔁 РЕСТАРТ</button>
                 <button class="btn" id="btn-end-turn" style="border-color: #ffea00; color: #ffea00;" onclick="game.endPlayerTurn()">🎮 ЗАВЕРШИТЬ ХОД</button>
             </div>
         </div>
@@ -723,6 +727,13 @@ class WeatherManager {
     }
     update(deltaTime) {
         if (!this.canvas || !this.ctx) return;
+
+        // Re-attach if lost (Fixes black background vs rain issue)
+        const container = document.getElementById('game-container');
+        if (container && this.canvas && !container.contains(this.canvas)) {
+            container.insertBefore(this.canvas, container.firstChild);
+        }
+
         const ctx = this.ctx;
         ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         if (this.mode === 'none') return;
@@ -865,7 +876,6 @@ class Game {
         const lineMat = new THREE.LineDashedMaterial({ color: 0x00ffff, dashSize: 2, gapSize: 1, linewidth: 2 });
         const lineGeo = new THREE.BufferGeometry();
         this.pathLine = new THREE.Line(lineGeo, lineMat);
-        this.pathLine.computeLineDistances();
         this.pathLine.visible = false;
         this.scene.add(this.pathLine);
         
@@ -999,7 +1009,8 @@ class Game {
         const mat = this.microVFXPoints.material;
         mat.uniforms.uTime.value = time;
         
-        const mission = MISSIONS[this.currentMissionIndex];
+        const missionIdx = window.appState ? window.appState.currentMissionIndex : 0;
+        const mission = MISSIONS[missionIdx] || MISSIONS[0];
         // Adapt VFX based on environment
         if (mission.id === 'm_sandstorm') { // Desert
             mat.uniforms.uColor.value.setHex(0xffaa55); // Sand color
@@ -2948,17 +2959,22 @@ class Game {
                     
                     if (dragProcessed) {
                         // Pan camera (Isometric projection compensation)
-                        const panSpeed = 0.5 / this.camera.zoom;
+                        let cz = this.camera.zoom;
+                        if (isNaN(cz) || cz <= 0.01) cz = 1;
+                        const panSpeed = 0.5 / cz;
+                
                         const movementX = (deltaX + deltaY * 2) * panSpeed;
                         const movementZ = (deltaY * 2 - deltaX) * panSpeed;
                         
-                        this.camera.position.x -= movementX;
-                        this.camera.position.z -= movementZ;
-                        
-                        // Push drag momentum onto friction velocity
-                        if (this.cameraVelocity) {
-                            this.cameraVelocity.x = -movementX * 0.45; // push inertia direction
-                            this.cameraVelocity.z = -movementZ * 0.45;
+                        if (!isNaN(movementX) && !isNaN(movementZ)) {
+                            this.camera.position.x -= movementX;
+                            this.camera.position.z -= movementZ;
+                            
+                            // Push drag momentum onto friction velocity
+                            if (this.cameraVelocity) {
+                                this.cameraVelocity.x = -movementX * 0.45; // push inertia direction
+                                this.cameraVelocity.z = -movementZ * 0.45;
+                            }
                         }
                         
                         // Camera bounds
@@ -2973,7 +2989,7 @@ class Game {
                     previousPointerPosition = { x: e.clientX, y: e.clientY };
                 } else { // Tooltip logic
                     if (this.state !== 'PLAYER_TURN' || !this.selectedEntity || e.pointerType === 'touch') {
-                        tooltip.style.display = 'none';
+                        if (tooltip) tooltip.style.display = 'none';
                         return;
                     }
                     this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
@@ -3211,7 +3227,7 @@ class Game {
     }
 
     executePendingAction() {
-        document.getElementById('context-menu').style.display = 'none';
+        safeSetStyle('context-menu', 'display', 'none');
         if (!this.pendingAction) return;
 
         let { type, x, y, entity } = this.pendingAction;
@@ -3250,7 +3266,7 @@ class Game {
 
     handleGridClick(x, y, clientX, clientY) {
         if (this.pathLine) this.pathLine.visible = false;
-        document.getElementById('context-menu').style.display = 'none';
+        safeSetStyle('context-menu', 'display', 'none');
         
         const clickedEntity = this.getEntityAt(x, y);
         
@@ -3382,6 +3398,7 @@ class Game {
     }
 
     selectEntity(e) {
+        if (!e) return;
         if(this.selectedEntity) {
             this.selectedEntity.baseMat.opacity = 1;
             this.selectedEntity.baseMat.transparent = false;
@@ -4330,11 +4347,16 @@ class Game {
         
         // Camera sliding friction / inertia physics sliding
         if (this.cameraVelocity && !this.isDraggingCamera && (Math.abs(this.cameraVelocity.x) > 0.05 || Math.abs(this.cameraVelocity.z) > 0.05)) {
-            this.camera.position.x += this.cameraVelocity.x;
-            this.camera.position.z += this.cameraVelocity.z;
+            const vx = isNaN(this.cameraVelocity.x) ? 0 : this.cameraVelocity.x;
+            const vz = isNaN(this.cameraVelocity.z) ? 0 : this.cameraVelocity.z;
+            
+            this.camera.position.x += vx;
+            this.camera.position.z += vz;
             
             this.cameraVelocity.x *= 0.88;
             this.cameraVelocity.z *= 0.88;
+            if (isNaN(this.cameraVelocity.x)) this.cameraVelocity.x = 0;
+            if (isNaN(this.cameraVelocity.z)) this.cameraVelocity.z = 0;
             
             const maxX = GRID_W * TILE_SIZE + 150;
             const minX = -50;
@@ -4346,16 +4368,17 @@ class Game {
         
         // Camera Shake implementation
         let shakeX = 0, shakeY = 0, shakeZ = 0;
-        if (this.cameraShake > 0.01) {
+        if (this.cameraShake > 0.01 && !isNaN(this.cameraShake)) {
             this.cameraShake -= deltaTime * 3.5;
-            const shakePower = Math.pow(this.cameraShake, 1.4) * 8.0; // powerful peak decay
+            if (this.cameraShake < 0) this.cameraShake = 0;
+            const shakePower = Math.pow(Math.max(0, this.cameraShake), 1.4) * 8.0;
             shakeX = (Math.random() - 0.5) * shakePower;
             shakeY = (Math.random() - 0.5) * shakePower * 0.5;
             shakeZ = (Math.random() - 0.5) * shakePower;
             
-            this.camera.position.x += shakeX;
-            this.camera.position.y += shakeY;
-            this.camera.position.z += shakeZ;
+            if (!isNaN(shakeX)) this.camera.position.x += shakeX;
+            if (!isNaN(shakeY)) this.camera.position.y += shakeY;
+            if (!isNaN(shakeZ)) this.camera.position.z += shakeZ;
         }
         
         // Real-time Gyroscope poll & Tactical camera positioning
@@ -4849,7 +4872,70 @@ const appState = {
                     </div>
                 </div>
             `;
-            detailEl.inner                    <div style="display:flex; gap:20px; flex-wrap: wrap;">
+            detailEl.innerHTML = statsHtml;
+        } else if (this.currentBarracksTab === 'weapon') {
+            // Gunsmith tab
+            const wpn = WEAPONS[op.weapon];
+            const attachments = op.attachments || { scope: 'stock', muzzle: 'none', magazine: 'standard' };
+
+            // Calculate active values
+            const activeScope = ATTACHMENTS.scopes.find(s => s.id === attachments.scope) || ATTACHMENTS.scopes[0];
+            const activeMuzzle = ATTACHMENTS.muzzles.find(m => m.id === attachments.muzzle) || ATTACHMENTS.muzzles[0];
+            const activeMag = ATTACHMENTS.magazines.find(m => m.id === attachments.magazine) || ATTACHMENTS.magazines[0];
+
+            let activeDamage = wpn.damage + (activeMuzzle.damage || 0) + (activeMag.damage || 0);
+            let activePen = wpn.pen + (activeMag.pen || 0);
+            let activeAcc = wpn.acc + (activeScope.acc || 0) + (activeMuzzle.acc || 0);
+            let activeRange = wpn.range + (activeScope.range || 0);
+            let activeSilenced = wpn.silenced || activeMuzzle.silenced;
+
+            let weaponHtml = `
+                <div style="font-family: monospace; font-size: 13px;">
+                    <div style="align-items: center; border-bottom: 1px dashed #33aa77; padding-bottom:15px; margin-bottom:15px; display:flex; gap:15px;">
+                        <div style="font-size: 40px;">${wpn.icon}</div>
+                        <div>
+                            <div style="font-size: 18px; font-weight:bold; color: #fff;">${wpn.name}</div>
+                            <div style="color: #00ffaa; font-size: 11px; margin-top:3px;"><i>${wpn.desc}</i></div>
+                        </div>
+                    </div>
+                    
+                    <!-- HIGH-POLY BLUEPRINT BOX -->
+                    <div style="height: 180px; width: 100%; border: 1px solid #0055ff; margin-bottom: 20px; position: relative; background: #001133; overflow: hidden; display: flex; justify-content: center; align-items: center; box-shadow: inset 0 0 30px rgba(0, 85, 255, 0.4);">
+                        <!-- Blueprint Grid -->
+                        <div style="position: absolute; top:0; left:0; width:100%; height:100%; background-image: linear-gradient(rgba(0, 85, 255, 0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 85, 255, 0.3) 1px, transparent 1px); background-size: 20px 20px; z-index: 1;"></div>
+                        <div style="position: absolute; top:0; left:0; width:100%; height:100%; background-image: linear-gradient(rgba(0, 85, 255, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 85, 255, 0.1) 1px, transparent 1px); background-size: 4px 4px; z-index: 1;"></div>
+                        
+                        <!-- Blueprint Label -->
+                        <div style="position: absolute; top: 10px; left: 10px; color: #0088ff; z-index: 3; font-size: 10px; font-weight: bold;">
+                            SCHEMATIC OVERVIEW: ${wpn.name}<br>
+                            CAD VERSION 4.2.1
+                        </div>
+                        
+                        <!-- Dynamic Visual Weapon Placeholder or Image -->
+                        <div style="z-index: 2; color: rgba(0, 170, 255, 0.8); font-size: 80px; filter: drop-shadow(0 0 10px #00aaff); transform: scale(1.5);">
+                            ${wpn.icon}
+                        </div>
+                        
+                        <!-- Graphic Indicators for Modules -->
+                        <div style="position: absolute; z-index: 3; display: flex; flex-direction: column; right: 10px; top: 10px; border: 1px solid #0055ff; background: rgba(0,20,50,0.8); padding: 5px; font-size: 9px; color: #00aaff;">
+                            <div style="margin-bottom: 2px;">[OPTIC]: <span style="color:#fff;">${activeScope.name}</span></div>
+                            <div style="margin-bottom: 2px;">[MUZZLE]: <span style="color:#fff;">${activeMuzzle.name}</span></div>
+                            <div>[AMMO]: <span style="color:#fff;">${activeMag.name}</span></div>
+                        </div>
+                        
+                        <!-- Drawing specific line to optics/muzzle (fake schematic arrows) -->
+                        <svg style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2;" pointer-events="none">
+                             <line x1="45%" y1="40%" x2="40%" y2="20%" stroke="#0088ff" stroke-width="1" stroke-dasharray="2,2"/>
+                             <circle cx="45%" cy="40%" r="3" fill="none" stroke="#00aaff" stroke-width="1"/>
+                             <circle cx="40%" cy="20%" r="2" fill="#00aaff" />
+                             
+                             <line x1="60%" y1="50%" x2="80%" y2="40%" stroke="#0088ff" stroke-width="1" stroke-dasharray="2,2"/>
+                             <circle cx="60%" cy="50%" r="3" fill="none" stroke="#00aaff" stroke-width="1"/>
+                             <circle cx="80%" cy="40%" r="2" fill="#00aaff" />
+                        </svg>
+                    </div>
+
+                    <div style="display:flex; gap:20px; flex-wrap: wrap;">
                         <!-- Weapon Stats Card -->
                         <div style="flex:1; min-width: 250px; border-right:1px dashed #33aa77; padding-right:15px; display:flex; flex-direction:column; gap:10px;">
                             <h4 style="color:#00ffaa; margin:0; border-bottom:1px solid #33aa77; padding-bottom:4px;">ХАРАКТЕРИСТИКИ СТВОЛА</h4>
@@ -4933,8 +5019,8 @@ const appState = {
         }
     },
     showIntel: function() {
-        document.getElementById('main-menu').style.display = 'none';
-        document.getElementById('intel-screen').style.display = 'flex';
+        safeSetStyle('main-menu', 'display', 'none');
+        safeSetStyle('intel-screen', 'display', 'flex');
         const idet = document.getElementById('intel-details');
         if (idet) idet.innerHTML = "Выберите файл для расшифровки...";
     },
@@ -5079,11 +5165,11 @@ const appState = {
         if (mission.cutscene && mission.cutscene.length > 0) {
             this.currentCutsceneIndex = 0;
             this.currentCutsceneData = mission.cutscene;
-            document.getElementById('debriefing-screen').style.display = 'none';
-            document.getElementById('main-menu').style.display = 'none';
-            document.getElementById('briefing-screen').style.display = 'none';
-            document.getElementById('game-container').style.display = 'none';
-            document.getElementById('cutscene-screen').style.display = 'block';
+            safeSetStyle('debriefing-screen', 'display', 'none');
+            safeSetStyle('main-menu', 'display', 'none');
+            safeSetStyle('briefing-screen', 'display', 'none');
+            safeSetStyle('game-container', 'display', 'none');
+            safeSetStyle('cutscene-screen', 'display', 'block');
             this.nextCutsceneDialog();
         } else {
             this.showBriefing();
@@ -5091,7 +5177,7 @@ const appState = {
     },
     nextCutsceneDialog: function() {
         if (this.currentCutsceneIndex >= this.currentCutsceneData.length) {
-            document.getElementById('cutscene-screen').style.display = 'none';
+            safeSetStyle('cutscene-screen', 'display', 'none');
             this.showBriefing();
             return;
         }
@@ -5156,14 +5242,14 @@ const appState = {
             document.getElementById('briefing-hvt-card').style.display = 'none';
         }
         
-        document.getElementById('debriefing-screen').style.display = 'none';
-        document.getElementById('main-menu').style.display = 'none';
-        document.getElementById('briefing-screen').style.display = 'flex';
-        document.getElementById('game-container').style.display = 'none';
+        safeSetStyle('debriefing-screen', 'display', 'none');
+        safeSetStyle('main-menu', 'display', 'none');
+        safeSetStyle('briefing-screen', 'display', 'flex');
+        safeSetStyle('game-container', 'display', 'none');
     },
     showDebriefing: function(stats) {
-        document.getElementById('game-container').style.display = 'none';
-        document.getElementById('debriefing-screen').style.display = 'flex';
+        safeSetStyle('game-container', 'display', 'none');
+        safeSetStyle('debriefing-screen', 'display', 'flex');
         
         // Award XP to all current squad operators
         const baseXP = 70;
@@ -5206,7 +5292,6 @@ const appState = {
         this.startMissionFlow();
     },
     startGame: function() {
-        // Stop and clean up menu audio manager to avoid overlapping / leaking AudioContext
         try {
             if (window.menuAudioManager) {
                 window.menuAudioManager.stopAll();
@@ -5216,13 +5301,23 @@ const appState = {
             console.warn("Error stopping menu audio inside startGame", e);
         }
 
-        document.getElementById('main-menu').style.display = 'none';
-        document.getElementById('briefing-screen').style.display = 'none';
-        document.getElementById('game-container').style.display = 'block';
+        safeSetStyle('main-menu', 'display', 'none');
+        safeSetStyle('briefing-screen', 'display', 'none');
+        safeSetStyle('nvg-overlay', 'display', 'none');
+        safeSetStyle('thermal-overlay', 'display', 'none');
+        safeSetStyle('lens-distortion', 'display', 'none');
+        safeSetStyle('game-container', 'display', 'block');
+        
         if (!window.game) {
             window.game = new Game();
         } else {
-            // Hard reset
+            const container = document.getElementById('game-container');
+            if (container && window.game.renderer && window.game.renderer.domElement) {
+                if (!container.contains(window.game.renderer.domElement)) {
+                    container.appendChild(window.game.renderer.domElement);
+                }
+            }
+
             window.game.scene.children.slice().forEach(c => {
                 if(c.type !== 'HemisphereLight' && c.type !== 'DirectionalLight' && c.type !== 'GridHelper' && c !== window.game.floorTiles && c !== window.game.covers && c !== window.game.gridHelper) {
                     window.game.scene.remove(c);
@@ -5248,8 +5343,11 @@ const appState = {
 
         const savedData = window.safeLocalStorage.getItem('shadowProtocolSave');
         if (savedData) {
-            document.getElementById('main-menu').style.display = 'none';
-            document.getElementById('game-container').style.display = 'block';
+            safeSetStyle('main-menu', 'display', 'none');
+            safeSetStyle('nvg-overlay', 'display', 'none');
+            safeSetStyle('thermal-overlay', 'display', 'none');
+            safeSetStyle('lens-distortion', 'display', 'none');
+            safeSetStyle('game-container', 'display', 'block');
             if (!window.game) window.game = new Game();
             try {
                 window.game.loadState(JSON.parse(savedData));
@@ -5309,8 +5407,8 @@ window.onload = () => {
     }
     
     // Show intro screen first
-    document.getElementById('intro-screen').style.display = 'flex';
-    document.getElementById('main-menu').style.display = 'none';
+    safeSetStyle('intro-screen', 'display', 'flex');
+    safeSetStyle('main-menu', 'display', 'none');
     
     // UI Parallax Effect
     window.addEventListener('mousemove', (e) => {
