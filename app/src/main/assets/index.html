@@ -614,9 +614,12 @@ window.safeLocalStorage = {
 // --- ЛОГИРОВАНИЕ ---
 const logPanel = document.getElementById('log-panel');
 function logMessage(msg, type='log-move') {
+    const freshLogPanel = document.getElementById('log-panel') || logPanel;
+    if (!freshLogPanel) return;
     const div = document.createElement('div');
+    if (!div) return;
     div.className = 'log-entry ' + type;
-    logPanel.appendChild(div);
+    freshLogPanel.appendChild(div);
     
     // Typewriter effect
     let i = 0;
@@ -626,12 +629,14 @@ function logMessage(msg, type='log-move') {
     // Set prefix immediately
     div.innerHTML = `<span style="opacity: 0.5;">${prefix}</span><span class="typewriter-text"></span>`;
     const textSpan = div.querySelector('.typewriter-text');
+    if (!textSpan) return;
     
     function typeWriter() {
+        if (!freshLogPanel) return;
         if (i < msg.length) {
             textSpan.innerHTML += msg.charAt(i);
             i++;
-            logPanel.scrollTop = logPanel.scrollHeight;
+            freshLogPanel.scrollTop = freshLogPanel.scrollHeight;
             setTimeout(typeWriter, speed);
         }
     }
@@ -3341,11 +3346,15 @@ class Game {
                 if (hitChance > 0) {
                     this.pendingAction = { type: 'ATTACK', x, y, entity: clickedEntity };
                     const cm = document.getElementById('context-menu');
-                    cm.style.left = clientX + 'px';
-                    cm.style.top = clientY + 'px';
-                    cm.style.display = 'flex';
-                    document.getElementById('context-title').innerText = 'АТАКА ЦЕЛИ';
-                    document.getElementById('btn-context-action').innerText = `ОГОНЬ (${hitChance}%)`;
+                    if (cm) {
+                        cm.style.left = clientX + 'px';
+                        cm.style.top = clientY + 'px';
+                        cm.style.display = 'flex';
+                    }
+                    const ct = document.getElementById('context-title');
+                    if (ct) ct.innerText = 'АТАКА ЦЕЛИ';
+                    const bca = document.getElementById('btn-context-action');
+                    if (bca) bca.innerText = `ОГОНЬ (${hitChance}%)`;
                 } else {
                     logMessage(`[ОШИБКА] Враг вне поля зрения.`);
                 }
@@ -3354,11 +3363,15 @@ class Game {
                 if (path && path.length > 0 && path.length <= this.selectedEntity.ap) {
                     this.pendingAction = { type: 'MOVE', x, y };
                     const cm = document.getElementById('context-menu');
-                    cm.style.left = clientX + 'px';
-                    cm.style.top = clientY + 'px';
-                    cm.style.display = 'flex';
-                    document.getElementById('context-title').innerText = 'ПЕРЕМЕЩЕНИЕ';
-                    document.getElementById('btn-context-action').innerText = `ИДТИ СЮДА (${path.length} ОД)`;
+                    if (cm) {
+                        cm.style.left = clientX + 'px';
+                        cm.style.top = clientY + 'px';
+                        cm.style.display = 'flex';
+                    }
+                    const ct = document.getElementById('context-title');
+                    if (ct) ct.innerText = 'ПЕРЕМЕЩЕНИЕ';
+                    const bca = document.getElementById('btn-context-action');
+                    if (bca) bca.innerText = `ИДТИ СЮДА (${path.length} ОД)`;
                 } else if (path && path.length > this.selectedEntity.ap) {
                     logMessage(`[ОШИБКА] Слишком далеко. Нужно ${path.length} ОД, есть ${this.selectedEntity.ap}.`);
                 } else {
@@ -3745,42 +3758,64 @@ class Game {
     }
 
     updateUI() {
+        const setVal = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.innerText = val;
+        };
+        const setStyle = (id, prop, val) => {
+            const el = document.getElementById(id);
+            if (el) el.style[prop] = val;
+        };
+        const setDisabled = (id, dis) => {
+            const el = document.getElementById(id);
+            if (el) el.disabled = dis;
+        };
+
         const ind = document.getElementById('turn-indicator');
-        ind.innerText = this.state === 'PLAYER_TURN' ? '[ ХОД ИГРОКА ]' : '[ АКТИВНОСТЬ ПРОТИВНИКА ]';
-        ind.style.color = this.state === 'PLAYER_TURN' ? '#0f0' : '#f00';
-        document.getElementById('turn-counter').innerText = `РАУНД: ${this.round}`;
-        
-        document.getElementById('btn-end-turn').disabled = this.state !== 'PLAYER_TURN';
+        if (ind) {
+            ind.innerText = this.state === 'PLAYER_TURN' ? '[ ХОД ИГРОКА ]' : '[ АКТИВНОСТЬ ПРОТИВНИКА ]';
+            ind.style.color = this.state === 'PLAYER_TURN' ? '#0f0' : '#f00';
+        }
+        setVal('turn-counter', `РАУНД: ${this.round}`);
+        setDisabled('btn-end-turn', this.state !== 'PLAYER_TURN');
 
         if (this.selectedEntity && this.selectedEntity.type === 'player') {
-            document.getElementById('op-name').innerText = this.selectedEntity.name;
-            document.getElementById('op-class').innerText = this.selectedEntity.className || '-';
-            document.getElementById('op-level').innerText = this.selectedEntity.level || 1;
-            document.getElementById('op-xp').innerText = this.selectedEntity.xp || 0;
-            document.getElementById('op-max-xp').innerText = this.selectedEntity.maxXp || 100;
+            setVal('op-name', this.selectedEntity.name);
+            setVal('op-class', this.selectedEntity.className || '-');
+            setVal('op-level', this.selectedEntity.level || 1);
+            setVal('op-xp', this.selectedEntity.xp || 0);
+            setVal('op-max-xp', this.selectedEntity.maxXp || 100);
             
             const portrait = document.getElementById('op-portrait');
-            if (this.selectedEntity.portrait) {
-                portrait.src = this.selectedEntity.portrait;
-                portrait.style.display = 'block';
-            } else {
-                portrait.style.display = 'none';
+            if (portrait) {
+                if (this.selectedEntity.portrait) {
+                    portrait.src = this.selectedEntity.portrait;
+                    portrait.style.display = 'block';
+                } else {
+                    portrait.style.display = 'none';
+                }
             }
             
-            document.getElementById('op-ap').innerText = this.selectedEntity.ap;
-            document.getElementById('op-max-ap').innerText = this.selectedEntity.maxAp;
-            document.getElementById('op-hp').innerText = this.selectedEntity.hp;
-            document.getElementById('op-weapon').innerText = this.selectedEntity.weapon;
+            setVal('op-ap', this.selectedEntity.ap);
+            setVal('op-max-ap', this.selectedEntity.maxAp);
+            setVal('op-hp', this.selectedEntity.hp);
+            setVal('op-weapon', this.selectedEntity.weapon);
             
-            document.getElementById('op-flashbang').innerText = this.selectedEntity.gadgets.flashbang;
-            document.getElementById('op-breach').innerText = this.selectedEntity.gadgets.breach;
-            document.getElementById('op-medkit').innerText = this.selectedEntity.gadgets.medkit;
-            document.getElementById('op-sensor').innerText = this.selectedEntity.gadgets.sensor;
+            if (this.selectedEntity.gadgets) {
+                setVal('op-flashbang', this.selectedEntity.gadgets.flashbang);
+                setVal('op-breach', this.selectedEntity.gadgets.breach);
+                setVal('op-medkit', this.selectedEntity.gadgets.medkit);
+                setVal('op-sensor', this.selectedEntity.gadgets.sensor);
+                
+                setDisabled('btn-flashbang', this.selectedEntity.gadgets.flashbang === 0);
+                setDisabled('btn-breach', this.selectedEntity.gadgets.breach === 0);
+                setDisabled('btn-medkit', this.selectedEntity.gadgets.medkit === 0);
+                setDisabled('btn-sensor', this.selectedEntity.gadgets.sensor === 0);
+            }
             
-            // EKG heartbeat effect
             const ekgSvg = document.getElementById('ekg-svg');
-            const hpRatio = this.selectedEntity.hp / this.selectedEntity.maxHp;
             if (ekgSvg) {
+                const hpRatio = this.selectedEntity.hp / this.selectedEntity.maxHp;
                 if (hpRatio > 0.6) {
                     ekgSvg.style.stroke = '#0f0'; // green
                     ekgSvg.style.animationDuration = '1.2s';
@@ -3793,32 +3828,27 @@ class Game {
                 }
             }
             
-            document.getElementById('btn-flashbang').disabled = this.selectedEntity.gadgets.flashbang === 0;
-            document.getElementById('btn-breach').disabled = this.selectedEntity.gadgets.breach === 0;
-            document.getElementById('btn-medkit').disabled = this.selectedEntity.gadgets.medkit === 0;
-            document.getElementById('btn-sensor').disabled = this.selectedEntity.gadgets.sensor === 0;
-            
-            document.getElementById('btn-flashbang').style.border = this.activeGadget === 'flashbang' ? '2px solid #fff' : '1px solid #0f0';
-            document.getElementById('btn-breach').style.border = this.activeGadget === 'breach' ? '2px solid #fff' : '1px solid #0f0';
-            document.getElementById('btn-medkit').style.border = this.activeGadget === 'medkit' ? '2px solid #fff' : '1px solid #0f0';
-            document.getElementById('btn-sensor').style.border = this.activeGadget === 'sensor' ? '2px solid #fff' : '1px solid #0f0';
+            setStyle('btn-flashbang', 'border', this.activeGadget === 'flashbang' ? '2px solid #fff' : '1px solid #0f0');
+            setStyle('btn-breach', 'border', this.activeGadget === 'breach' ? '2px solid #fff' : '1px solid #0f0');
+            setStyle('btn-medkit', 'border', this.activeGadget === 'medkit' ? '2px solid #fff' : '1px solid #0f0');
+            setStyle('btn-sensor', 'border', this.activeGadget === 'sensor' ? '2px solid #fff' : '1px solid #0f0');
         } else {
-            document.getElementById('op-name').innerText = '-';
-            document.getElementById('op-class').innerText = '-';
-            document.getElementById('op-level').innerText = '-';
-            document.getElementById('op-xp').innerText = '-';
-            document.getElementById('op-max-xp').innerText = '-';
-            document.getElementById('op-portrait').style.display = 'none';
+            setVal('op-name', '-');
+            setVal('op-class', '-');
+            setVal('op-level', '-');
+            setVal('op-xp', '-');
+            setVal('op-max-xp', '-');
+            setStyle('op-portrait', 'display', 'none');
             
-            document.getElementById('op-ap').innerText = '-';
-            document.getElementById('op-max-ap').innerText = '-';
-            document.getElementById('op-hp').innerText = '-';
-            document.getElementById('op-weapon').innerText = '-';
+            setVal('op-ap', '-');
+            setVal('op-max-ap', '-');
+            setVal('op-hp', '-');
+            setVal('op-weapon', '-');
             
-            document.getElementById('op-flashbang').innerText = '0';
-            document.getElementById('op-breach').innerText = '0';
-            document.getElementById('op-medkit').innerText = '0';
-            document.getElementById('op-sensor').innerText = '0';
+            setVal('op-flashbang', '0');
+            setVal('op-breach', '0');
+            setVal('op-medkit', '0');
+            setVal('op-sensor', '0');
             
             const ekgSvg = document.getElementById('ekg-svg');
             if (ekgSvg) {
@@ -3826,15 +3856,15 @@ class Game {
                 ekgSvg.style.animationDuration = '0s'; // stop animation
             }
             
-            document.getElementById('btn-flashbang').disabled = true;
-            document.getElementById('btn-breach').disabled = true;
-            document.getElementById('btn-medkit').disabled = true;
-            document.getElementById('btn-sensor').disabled = true;
+            setDisabled('btn-flashbang', true);
+            setDisabled('btn-breach', true);
+            setDisabled('btn-medkit', true);
+            setDisabled('btn-sensor', true);
             
-            document.getElementById('btn-flashbang').style.border = '1px solid #0f0';
-            document.getElementById('btn-breach').style.border = '1px solid #0f0';
-            document.getElementById('btn-medkit').style.border = '1px solid #0f0';
-            document.getElementById('btn-sensor').style.border = '1px solid #0f0';
+            setStyle('btn-flashbang', 'border', '1px solid #0f0');
+            setStyle('btn-breach', 'border', '1px solid #0f0');
+            setStyle('btn-medkit', 'border', '1px solid #0f0');
+            setStyle('btn-sensor', 'border', '1px solid #0f0');
         }
     }
 
@@ -4407,7 +4437,8 @@ const appState = {
             console.error(e);
         }
 
-        document.getElementById('intro-screen').style.display = 'none';
+        const introScreenDef = document.getElementById('intro-screen');
+        if (introScreenDef) introScreenDef.style.display = 'none';
         this.showMainMenu();
         
         // Hide load btn if no save
@@ -4493,13 +4524,11 @@ const appState = {
         }
 
         this.triggerCyberGlitchTransition('ПОДКЛЮЧЕНИЕ К ГЛАВНОМУ ТЕРМИНАЛУ...', () => {
-            document.getElementById('debriefing-screen').style.display = 'none';
-            document.getElementById('main-menu').style.display = 'flex';
-            document.getElementById('briefing-screen').style.display = 'none';
-            document.getElementById('settings-screen').style.display = 'none';
-            document.getElementById('intel-screen').style.display = 'none';
-            document.getElementById('barracks-screen').style.display = 'none';
-            document.getElementById('game-container').style.display = 'none';
+            const screenIds = ['debriefing-screen', 'main-menu', 'briefing-screen', 'settings-screen', 'intel-screen', 'barracks-screen', 'game-container'];
+            screenIds.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.style.display = (id === 'main-menu') ? 'flex' : 'none';
+            });
             
             // Clean up old game WebGL elements if they exist
             try {
@@ -4509,14 +4538,16 @@ const appState = {
 
             const saveExists = window.safeLocalStorage.getItem('shadowProtocolSave');
             const loadBtn = document.getElementById('btn-load-game');
-            if (saveExists) {
-                loadBtn.disabled = false;
-                loadBtn.style.borderColor = '#0f0';
-                loadBtn.style.color = '#0f0';
-            } else {
-                loadBtn.disabled = true;
-                loadBtn.style.borderColor = '#555';
-                loadBtn.style.color = '#555';
+            if (loadBtn) {
+                if (saveExists) {
+                    loadBtn.disabled = false;
+                    loadBtn.style.borderColor = '#0f0';
+                    loadBtn.style.color = '#0f0';
+                } else {
+                    loadBtn.disabled = true;
+                    loadBtn.style.borderColor = '#555';
+                    loadBtn.style.color = '#555';
+                }
             }
 
             // Immediately offer a user gesture chance to restart or initialize the menu music context
@@ -4529,14 +4560,19 @@ const appState = {
     },
     showSettings: function() {
         this.triggerCyberGlitchTransition('ЗАГРУЗКА НАСТРОЕК СИСТЕМЫ...', () => {
-            document.getElementById('main-menu').style.display = 'none';
-            document.getElementById('settings-screen').style.display = 'flex';
+            const mm = document.getElementById('main-menu');
+            if (mm) mm.style.display = 'none';
+            const ss = document.getElementById('settings-screen');
+            if (ss) ss.style.display = 'flex';
             
             // Set up input values based on current globalSettings
             const settings = window.globalSettings || { volume: 1.0, vfxEnabled: true, amoledMode: true, gyroEnabled: false, gyroSensitivity: 1.0 };
-            document.getElementById('volume-slider').value = settings.volume;
-            document.getElementById('vol-lbl').innerText = Math.round(settings.volume * 100) + '%';
-            document.getElementById('vfx-toggle').checked = settings.vfxEnabled;
+            const volSlider = document.getElementById('volume-slider');
+            if (volSlider) volSlider.value = settings.volume;
+            const volLbl = document.getElementById('vol-lbl');
+            if (volLbl) volLbl.innerText = Math.round(settings.volume * 100) + '%';
+            const vfxToggle = document.getElementById('vfx-toggle');
+            if (vfxToggle) vfxToggle.checked = settings.vfxEnabled;
             
             const amoledToggle = document.getElementById('amoled-toggle');
             if (amoledToggle) {
@@ -4591,15 +4627,20 @@ const appState = {
     },
     showIntel: function() {
         this.triggerCyberGlitchTransition('ОТКРЫТИЕ ШИФРОВАННЫХ АРХИВОВ...', () => {
-            document.getElementById('main-menu').style.display = 'none';
-            document.getElementById('intel-screen').style.display = 'flex';
-            document.getElementById('intel-details').innerHTML = "Выберите файл для расшифровки...";
+            const mm = document.getElementById('main-menu');
+            if (mm) mm.style.display = 'none';
+            const isr = document.getElementById('intel-screen');
+            if (isr) isr.style.display = 'flex';
+            const idet = document.getElementById('intel-details');
+            if (idet) idet.innerHTML = "Выберите файл для расшифровки...";
         });
     },
     showBarracks: function() {
         this.triggerCyberGlitchTransition('ВХОД В БАРАКИ ОПЕРАТИВНИКОВ...', () => {
-            document.getElementById('main-menu').style.display = 'none';
-            document.getElementById('barracks-screen').style.display = 'flex';
+            const mm = document.getElementById('main-menu');
+            if (mm) mm.style.display = 'none';
+            const bs = document.getElementById('barracks-screen');
+            if (bs) bs.style.display = 'flex';
             if (squadState.operators.length === 0) {
                 squadState.init();
             }
@@ -4740,7 +4781,7 @@ const appState = {
                 double_tap_assault: '💥',
                 shadow_step: '👤',
                 explosive_entry: '💣',
-                suppression_master: '💢',
+                suppression_master: '💥',
                 heavy_shield: '🛡️',
                 bulletproof: '🧥',
                 demolitionist: '🎒',
@@ -4808,70 +4849,7 @@ const appState = {
                     </div>
                 </div>
             `;
-            detailEl.innerHTML = statsHtml;
-        } else if (this.currentBarracksTab === 'weapon') {
-            // Gunsmith tab
-            const wpn = WEAPONS[op.weapon];
-            const attachments = op.attachments || { scope: 'stock', muzzle: 'none', magazine: 'standard' };
-
-            // Calculate active values
-            const activeScope = ATTACHMENTS.scopes.find(s => s.id === attachments.scope) || ATTACHMENTS.scopes[0];
-            const activeMuzzle = ATTACHMENTS.muzzles.find(m => m.id === attachments.muzzle) || ATTACHMENTS.muzzles[0];
-            const activeMag = ATTACHMENTS.magazines.find(m => m.id === attachments.magazine) || ATTACHMENTS.magazines[0];
-
-            let activeDamage = wpn.damage + (activeMuzzle.damage || 0) + (activeMag.damage || 0);
-            let activePen = wpn.pen + (activeMag.pen || 0);
-            let activeAcc = wpn.acc + (activeScope.acc || 0) + (activeMuzzle.acc || 0);
-            let activeRange = wpn.range + (activeScope.range || 0);
-            let activeSilenced = wpn.silenced || activeMuzzle.silenced;
-
-            let weaponHtml = `
-                <div style="font-family: monospace; font-size: 13px;">
-                    <div style="align-items: center; border-bottom: 1px dashed #33aa77; padding-bottom:15px; margin-bottom:15px; display:flex; gap:15px;">
-                        <div style="font-size: 40px;">${wpn.icon}</div>
-                        <div>
-                            <div style="font-size: 18px; font-weight:bold; color: #fff;">${wpn.name}</div>
-                            <div style="color: #00ffaa; font-size: 11px; margin-top:3px;"><i>${wpn.desc}</i></div>
-                        </div>
-                    </div>
-                    
-                    <!-- HIGH-POLY BLUEPRINT BOX -->
-                    <div style="height: 180px; width: 100%; border: 1px solid #0055ff; margin-bottom: 20px; position: relative; background: #001133; overflow: hidden; display: flex; justify-content: center; align-items: center; box-shadow: inset 0 0 30px rgba(0, 85, 255, 0.4);">
-                        <!-- Blueprint Milimeter Grid -->
-                        <div style="position: absolute; top:0; left:0; width:100%; height:100%; background-image: linear-gradient(rgba(0, 85, 255, 0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 85, 255, 0.3) 1px, transparent 1px); background-size: 20px 20px; z-index: 1;"></div>
-                        <div style="position: absolute; top:0; left:0; width:100%; height:100%; background-image: linear-gradient(rgba(0, 85, 255, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 85, 255, 0.1) 1px, transparent 1px); background-size: 4px 4px; z-index: 1;"></div>
-                        
-                        <!-- Blueprint Label -->
-                        <div style="position: absolute; top: 10px; left: 10px; color: #0088ff; z-index: 3; font-size: 10px; font-weight: bold;">
-                            SCHEMATIC OVERVIEW: ${wpn.name}<br>
-                            CAD VERSION 4.2.1
-                        </div>
-                        
-                        <!-- Dynamic Visual Weapon Placeholder or Image -->
-                        <div style="z-index: 2; color: rgba(0, 170, 255, 0.8); font-size: 80px; filter: drop-shadow(0 0 10px #00aaff); transform: scale(1.5);">
-                            ${wpn.icon}
-                        </div>
-                        
-                        <!-- Graphic Indicators for Modules -->
-                        <div style="position: absolute; z-index: 3; display: flex; flex-direction: column; right: 10px; top: 10px; border: 1px solid #0055ff; background: rgba(0,20,50,0.8); padding: 5px; font-size: 9px; color: #00aaff;">
-                            <div style="margin-bottom: 2px;">[OPTIC]: <span style="color:#fff;">${activeScope.name}</span></div>
-                            <div style="margin-bottom: 2px;">[MUZZLE]: <span style="color:#fff;">${activeMuzzle.name}</span></div>
-                            <div>[AMMO]: <span style="color:#fff;">${activeMag.name}</span></div>
-                        </div>
-                        
-                        <!-- Drawing specific line to optics/muzzle (fake schematic arrows) -->
-                        <svg style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2;" pointer-events="none">
-                             <line x1="45%" y1="40%" x2="40%" y2="20%" stroke="#0088ff" stroke-width="1" stroke-dasharray="2,2"/>
-                             <circle cx="45%" cy="40%" r="3" fill="none" stroke="#00aaff" stroke-width="1"/>
-                             <circle cx="40%" cy="20%" r="2" fill="#00aaff" />
-                             
-                             <line x1="60%" y1="50%" x2="80%" y2="40%" stroke="#0088ff" stroke-width="1" stroke-dasharray="2,2"/>
-                             <circle cx="60%" cy="50%" r="3" fill="none" stroke="#00aaff" stroke-width="1"/>
-                             <circle cx="80%" cy="40%" r="2" fill="#00aaff" />
-                        </svg>
-                    </div>
-
-                    <div style="display:flex; gap:20px; flex-wrap: wrap;">
+            detailEl.inner                    <div style="display:flex; gap:20px; flex-wrap: wrap;">
                         <!-- Weapon Stats Card -->
                         <div style="flex:1; min-width: 250px; border-right:1px dashed #33aa77; padding-right:15px; display:flex; flex-direction:column; gap:10px;">
                             <h4 style="color:#00ffaa; margin:0; border-bottom:1px solid #33aa77; padding-bottom:4px;">ХАРАКТЕРИСТИКИ СТВОЛА</h4>
@@ -4957,7 +4935,8 @@ const appState = {
     showIntel: function() {
         document.getElementById('main-menu').style.display = 'none';
         document.getElementById('intel-screen').style.display = 'flex';
-        document.getElementById('intel-details').innerHTML = "Выберите файл для расшифровки...";
+        const idet = document.getElementById('intel-details');
+        if (idet) idet.innerHTML = "Выберите файл для расшифровки...";
     },
     loadIntel: function(id) {
         const intelData = {
@@ -4968,7 +4947,8 @@ const appState = {
             'Tactical': '<b>ТАКТИКА: ИНТЕРАКТИВНОЕ ОКРУЖЕНИЕ И РАЗРУШАЕМОСТЬ</b><br><br><b>1. Взрывоопасные бочки:</b> На полях сражений расположены красные бочки с горючим. Попадание в бочку вызывает мощный взрыв, который наносит 40 ед. урона всем юнитам в радиусе 2 клеток, снижает их броню до нуля и поджигает почву.<br><br><b>2. Разрушение укрытий:</b> Укрытия имеют запас прочности (Полные: 100 HP, Половинные: 60 HP). Выстрелы из тяжелого оружия (винтовки, пулеметы) и взрывы разрушают укрытия. Полное укрытие при получении урона деградирует в половинное, а половинное превращается в обломки.<br><br><b>3. Огонь под ногами:</b> Горящие тайлы наносят 10 ед. урона здоровью и отнимают 2 ОД у любого юнита, вступающего на них. Будьте крайне осторожны.',
             'HostagesManual': '<b>СПЕЦОПЕРАЦИИ: СПАСЕНИЕ ЗАЛОЖНИКОВ</b><br><br><b>1. Правила безопасности:</b> Гражданские лица на линии огня - критическая угроза провала миссии. Любое случайное попадание или взрыв вблизи заложника наносит ему урон. Гибель заложника ведет к мгновенному штрафу к репутации/опыту и тяжелым последствиям.<br><br><b>2. Механика паники:</b> Услышав взрыв, выстрел или крики в непосредственной близости, заложники впадают в кратковременное состояние <b>ПАНИКИ</b>. На своем ходу испуганный заложник хаотично бежит к ближайшей свободной клетке укрытия, подальше от эпицентра шума.<br><br><b>3. Живой щит:</b> Противники могут использовать заложников как живые щиты. В этом случае фронтальный огонь заблокирован, делайте фланговые обходы.'
         };
-        document.getElementById('intel-details').innerHTML = intelData[id] || "Данные повреждены или засекречены.";
+        const idet = document.getElementById('intel-details');
+        if (idet) idet.innerHTML = intelData[id] || "Данные повреждены или засекречены.";
     },
     updateSettings: function() {
         const vol = document.getElementById('volume-slider').value;

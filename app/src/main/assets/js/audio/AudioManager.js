@@ -1,6 +1,7 @@
 class AudioManager {
     constructor() {
         this.ctx = null;
+        this.masterGain = null;
         this.ambientGain = null;
         this.combatGain = null;
         this.isCombat = false;
@@ -26,29 +27,79 @@ class AudioManager {
                 const AudioContext = window.AudioContext || window.webkitAudioContext;
                 if (AudioContext) {
                     this.ctx = new AudioContext();
+                    
+                    // Create main Master Gain control node
+                    this.masterGain = this.ctx.createGain();
+                    this.updateMasterVolume();
+                    this.masterGain.connect(this.ctx.destination);
+                    
                     this.startAmbient();
                     
                     this.combatGain = this.ctx.createGain();
                     this.combatGain.gain.value = 0; // Silent initially
-                    this.combatGain.connect(this.ctx.destination);
+                    this.combatGain.connect(this.masterGain);
                     
                     this.initReverb();
                     this.initHeartbeatLoop();
                     
                     this.nextNoteTime = this.ctx.currentTime + 0.1;
                     this.scheduler();
+                    console.log("Offline Audio Engine initiated and bound to master slider");
                 }
             } catch (e) {
                 console.error("AudioContext initialization failed", e);
                 this.ctx = null;
             }
         }
-        if (this.ctx && this.ctx.state === 'suspended') {
-            try {
-                this.ctx.resume().catch(e => console.warn("Context resume failed due to interaction constraints", e));
-            } catch (err) {
-                console.warn("Context resume execution failed", err);
+        
+        if (this.ctx) {
+            this.updateMasterVolume();
+            if (this.ctx.state === 'suspended') {
+                try {
+                    this.ctx.resume().then(() => {
+                        console.log("AudioContext successfully resumed.");
+                    }).catch(e => console.warn("Context resume failed", e));
+                } catch (err) {
+                    console.warn("Context resume execution failed", err);
+                }
             }
+        }
+    }
+
+    updateMasterVolume() {
+        if (this.ctx && this.masterGain) {
+            try {
+                const volume = (window.globalSettings && window.globalSettings.volume !== undefined) ? parseFloat(window.globalSettings.volume) : 1.0;
+                this.masterGain.gain.setValueAtTime(volume, this.ctx.currentTime);
+                console.log("Audio master volume updated in real-time:", volume);
+            } catch (err) {
+                console.warn("Failed to set master volume", err);
+            }
+        }
+    }
+
+    speak(text) {
+        if (!window.speechSynthesis) return;
+        // Check if SFX / Voice is disabled
+        if (window.globalSettings && window.globalSettings.vfxEnabled === false) return;
+        
+        try {
+            window.speechSynthesis.cancel(); // Stop playing current spoken task
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'ru-RU';
+            utterance.rate = 1.05; // military robotic quick tone
+            utterance.pitch = 0.8; // deep operator artificial intelligence sound
+            utterance.volume = (window.globalSettings && window.globalSettings.volume !== undefined) ? parseFloat(window.globalSettings.volume) : 1.0;
+            
+            const voices = window.speechSynthesis.getVoices();
+            const ruVoice = voices.find(v => v.lang.includes('ru') || v.lang.includes('RU'));
+            if (ruVoice) {
+                utterance.voice = ruVoice;
+            }
+            
+            window.speechSynthesis.speak(utterance);
+        } catch (e) {
+            console.warn("SpeechSynthesis output failed", e);
         }
     }
 
@@ -64,7 +115,7 @@ class AudioManager {
             
             this.reverbGain = this.ctx.createGain();
             this.reverbGain.gain.value = 0.28; // Dry/Wet mix balancing
-            this.reverbGain.connect(this.ctx.destination);
+            this.reverbGain.connect(this.masterGain || this.ctx.destination);
             
             this.reverbNode = this.createReverbNode();
             if (this.reverbNode) {
@@ -77,36 +128,41 @@ class AudioManager {
 
     createReverbNode() {
         if (!this.ctx) return null;
-        const rate = this.ctx.sampleRate;
-        const length = rate * 2.0; // 2 seconds of acoustics decay mapping
-        const impulse = this.ctx.createBuffer(2, length, rate);
-        const left = impulse.getChannelData(0);
-        const right = impulse.getChannelData(1);
-        
-        let decay = 1.5; // Default acoustics reverberation delay
-        if (window.appState) {
-            const mIdx = window.appState.currentMissionIndex;
-            if (mIdx === 0) decay = 1.1; // Port - High-frequency reflections on wet cold pavement
-            else if (mIdx === 1) decay = 0.35; // Sand Storm - Acoustic energy fully absorbed by sandy open dunes
-            else if (mIdx === 2) decay = 2.4; // Skyscraper - Cavernous luxury lobby reflections showing volume scale
-        }
-        
-        for (let i = 0; i < length; i++) {
-            const k = i / rate;
-            const percent = k / decay;
-            if (percent < 1.0) {
-                const envelope = Math.pow(1.0 - percent, 2.5);
-                left[i] = (Math.random() * 2 - 1) * envelope;
-                right[i] = (Math.random() * 2 - 1) * envelope;
-            } else {
-                left[i] = 0;
-                right[i] = 0;
+        try {
+            const rate = this.ctx.sampleRate;
+            const length = rate * 2.0; // 2 seconds of acoustics decay mapping
+            const impulse = this.ctx.createBuffer(2, length, rate);
+            const left = impulse.getChannelData(0);
+            const right = impulse.getChannelData(1);
+            
+            let decay = 1.5; // Default acoustics reverberation delay
+            if (window.appState) {
+                const mIdx = window.appState.currentMissionIndex;
+                if (mIdx === 0) decay = 1.1; // Port
+                else if (mIdx === 1) decay = 0.35; // Sand Storm
+                else if (mIdx === 2) decay = 2.4; // Skyscraper
             }
+            
+            for (let i = 0; i < length; i++) {
+                const k = i / rate;
+                const percent = k / decay;
+                if (percent < 1.0) {
+                    const envelope = Math.pow(1.0 - percent, 2.5);
+                    left[i] = (Math.random() * 2 - 1) * envelope;
+                    right[i] = (Math.random() * 2 - 1) * envelope;
+                } else {
+                    left[i] = 0;
+                    right[i] = 0;
+                }
+            }
+            
+            const convolver = this.ctx.createConvolver();
+            convolver.buffer = impulse;
+            return convolver;
+        } catch (err) {
+            console.warn("Failed to create convolve impulse", err);
+            return null;
         }
-        
-        const convolver = this.ctx.createConvolver();
-        convolver.buffer = impulse;
-        return convolver;
     }
 
     initHeartbeatLoop() {
@@ -137,9 +193,12 @@ class AudioManager {
         gain1.gain.setValueAtTime(0.38 * intensity, now);
         gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.14);
         osc1.connect(gain1);
-        gain1.connect(this.ctx.destination);
-        osc1.start(now);
-        osc1.stop(now + 0.15);
+        gain1.connect(this.masterGain || this.ctx.destination);
+        
+        try {
+            osc1.start(now);
+            osc1.stop(now + 0.15);
+        } catch(e) {}
         
         // Dub lower heartbeat pulse
         const osc2 = this.ctx.createOscillator();
@@ -150,9 +209,12 @@ class AudioManager {
         gain2.gain.setValueAtTime(0.26 * intensity, now + delay);
         gain2.gain.exponentialRampToValueAtTime(0.01, now + delay + 0.14);
         osc2.connect(gain2);
-        gain2.connect(this.ctx.destination);
-        osc2.start(now + delay);
-        osc2.stop(now + delay + 0.15);
+        gain2.connect(this.masterGain || this.ctx.destination);
+        
+        try {
+            osc2.start(now + delay);
+            osc2.stop(now + delay + 0.15);
+        } catch(e) {}
     }
 
     setCombatState(inCombat) {
@@ -172,9 +234,13 @@ class AudioManager {
 
     scheduler() {
         if (!this.ctx) return;
-        while (this.nextNoteTime < this.ctx.currentTime + 0.1) {
-            this.playCombatStep(this.nextNoteTime);
-            this.nextStep();
+        try {
+            while (this.nextNoteTime < this.ctx.currentTime + 0.1) {
+                this.playCombatStep(this.nextNoteTime);
+                this.nextStep();
+            }
+        } catch (e) {
+            console.warn("Scheduler cycle error", e);
         }
         this.timerID = setTimeout(() => this.scheduler(), 25);
     }
@@ -218,8 +284,10 @@ class AudioManager {
             osc.connect(filter);
             filter.connect(gain);
             
-            osc.start(time);
-            osc.stop(time + 0.2);
+            try {
+                osc.start(time);
+                osc.stop(time + 0.2);
+            } catch(e) {}
         }
         
         // Drum
@@ -234,8 +302,10 @@ class AudioManager {
             gain.gain.setValueAtTime(0.6, time);
             gain.gain.exponentialRampToValueAtTime(0.01, time + 0.1);
             
-            osc.start(time);
-            osc.stop(time + 0.1);
+            try {
+                osc.start(time);
+                osc.stop(time + 0.1);
+            } catch(e) {}
         } else if (drum === 1) { // Hihat
             const bufSize = this.ctx.sampleRate * 0.05; 
             const buffer = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
@@ -258,7 +328,9 @@ class AudioManager {
             filter.connect(gain);
             gain.connect(this.combatGain);
             
-            noise.start(time);
+            try {
+                noise.start(time);
+            } catch(e) {}
         }
     }
 
@@ -269,7 +341,7 @@ class AudioManager {
         const osc = this.ctx.createOscillator();
         this.ambientGain = this.ctx.createGain();
         osc.connect(this.ambientGain);
-        this.ambientGain.connect(this.ctx.destination);
+        this.ambientGain.connect(this.masterGain || this.ctx.destination);
         
         osc.type = 'sine';
         osc.frequency.value = 45; // Subwoofer rumble
@@ -295,7 +367,6 @@ class AudioManager {
         this.ambientSynthNodes = [];
 
         // Procedural sci-fi tension ambient synthesizer pad (perfectly audible but non-intrusive)
-        // plays a beautiful raw fifth/octave chord in mid frequencies which represent tension
         const notes = [110, 165, 220]; // A2 (110Hz), E3 (165Hz), A3 (220Hz)
         try {
             const ctx = this.ctx;
@@ -307,8 +378,6 @@ class AudioManager {
                 
                 padOsc.type = 'triangle';
                 padOsc.frequency.setValueAtTime(freq, ctx.currentTime);
-                
-                // Random detune for thick synthesizer analog warmth
                 padOsc.detune.setValueAtTime((Math.random() * 10) - 5, ctx.currentTime);
                 
                 const padFilter = ctx.createBiquadFilter();
@@ -316,7 +385,6 @@ class AudioManager {
                 padFilter.frequency.setValueAtTime(400 + idx * 70, ctx.currentTime);
                 padFilter.Q.value = 2.5;
                 
-                // Breathing sweep modulator
                 padLfo.frequency.setValueAtTime(0.05 + idx * 0.02, ctx.currentTime);
                 padLfoGain.gain.setValueAtTime(100, ctx.currentTime);
                 
@@ -356,95 +424,99 @@ class AudioManager {
         // Dynamic reverb update based on map
         this.initReverb();
         
-        if (missionId === 1) { // Baltic Port (Operation Dead Water) - Ambient Ocean Wave rolls & Rain drops
-            const pSize = ctx.sampleRate * 2.0;
-            const pBuffer = ctx.createBuffer(1, pSize, ctx.sampleRate);
-            const pData = pBuffer.getChannelData(0);
-            for (let i = 0; i < pSize; i++) pData[i] = Math.random() * 2 - 1;
-            
-            const pNode = ctx.createBufferSource();
-            pNode.buffer = pBuffer;
-            pNode.loop = true;
-            
-            const filter = ctx.createBiquadFilter();
-            filter.type = 'lowpass';
-            filter.frequency.setValueAtTime(150, now);
-            
-            const modOsc = ctx.createOscillator();
-            modOsc.type = 'sine';
-            modOsc.frequency.value = 0.15;
-            const modGain = ctx.createGain();
-            modGain.gain.value = 80;
-            
-            pNode.connect(filter);
-            modOsc.connect(modGain);
-            modGain.connect(filter.frequency);
-            
-            const gNode = ctx.createGain();
-            gNode.gain.setValueAtTime(0.04, now);
-            filter.connect(gNode);
-            gNode.connect(ctx.destination);
-            
-            pNode.start(now);
-            modOsc.start(now);
-            
-            this.ambientOscs.push(pNode, modOsc, gNode);
-            
-        } else if (missionId === 2) { // Sand Storm - Whistling heavy sandstorm wind
-            const windSize = ctx.sampleRate * 1.5;
-            const windBuffer = ctx.createBuffer(1, windSize, ctx.sampleRate);
-            const windData = windBuffer.getChannelData(0);
-            for (let i = 0; i < windSize; i++) windData[i] = Math.random() * 2 - 1;
-            
-            const windNode = ctx.createBufferSource();
-            windNode.buffer = windBuffer;
-            windNode.loop = true;
-            
-            const windFilter = ctx.createBiquadFilter();
-            windFilter.type = 'bandpass';
-            windFilter.Q.value = 15.0; // whistling resonance
-            windFilter.frequency.setValueAtTime(320, now);
-            
-            const sweepOsc = ctx.createOscillator();
-            sweepOsc.type = 'sine';
-            sweepOsc.frequency.value = 0.08;
-            const sweepGain = ctx.createGain();
-            sweepGain.gain.value = 160;
-            
-            windNode.connect(windFilter);
-            sweepOsc.connect(sweepGain);
-            sweepGain.connect(windFilter.frequency);
-            
-            const windGainNode = ctx.createGain();
-            windGainNode.gain.setValueAtTime(0.032, now);
-            windFilter.connect(windGainNode);
-            windGainNode.connect(ctx.destination);
-            
-            windNode.start(now);
-            sweepOsc.start(now);
-            
-            this.ambientOscs.push(windNode, sweepOsc, windGainNode);
-            
-        } else if (missionId === 3 || missionId === 4) { // Mainframe Server Hum & static sparks
-            const osc50 = ctx.createOscillator();
-            osc50.type = 'sine';
-            osc50.frequency.value = 50; // Mains electric noise hum
-            
-            const osc120 = ctx.createOscillator();
-            osc120.type = 'sine';
-            osc120.frequency.value = 120; // Server cooling fans
-            
-            const humGain = ctx.createGain();
-            humGain.gain.setValueAtTime(0.015, now);
-            
-            osc50.connect(humGain);
-            osc120.connect(humGain);
-            humGain.connect(ctx.destination);
-            
-            osc50.start(now);
-            osc120.start(now);
-            
-            this.ambientOscs.push(osc50, osc120, humGain);
+        try {
+            if (missionId === 1) { // Baltic Port - Ocean Wave rolls & Rain drops
+                const pSize = ctx.sampleRate * 2.0;
+                const pBuffer = ctx.createBuffer(1, pSize, ctx.sampleRate);
+                const pData = pBuffer.getChannelData(0);
+                for (let i = 0; i < pSize; i++) pData[i] = Math.random() * 2 - 1;
+                
+                const pNode = ctx.createBufferSource();
+                pNode.buffer = pBuffer;
+                pNode.loop = true;
+                
+                const filter = ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(150, now);
+                
+                const modOsc = ctx.createOscillator();
+                modOsc.type = 'sine';
+                modOsc.frequency.value = 0.15;
+                const modGain = ctx.createGain();
+                modGain.gain.value = 80;
+                
+                pNode.connect(filter);
+                modOsc.connect(modGain);
+                modGain.connect(filter.frequency);
+                
+                const gNode = ctx.createGain();
+                gNode.gain.setValueAtTime(0.04, now);
+                filter.connect(gNode);
+                gNode.connect(this.masterGain || ctx.destination);
+                
+                pNode.start(now);
+                modOsc.start(now);
+                
+                this.ambientOscs.push(pNode, modOsc, gNode);
+                
+            } else if (missionId === 2) { // Sand Storm - Whistling heavy sandstorm wind
+                const windSize = ctx.sampleRate * 1.5;
+                const windBuffer = ctx.createBuffer(1, windSize, ctx.sampleRate);
+                const windData = windBuffer.getChannelData(0);
+                for (let i = 0; i < windSize; i++) windData[i] = Math.random() * 2 - 1;
+                
+                const windNode = ctx.createBufferSource();
+                windNode.buffer = windBuffer;
+                windNode.loop = true;
+                
+                const windFilter = ctx.createBiquadFilter();
+                windFilter.type = 'bandpass';
+                windFilter.Q.value = 15.0; // whistling resonance
+                windFilter.frequency.setValueAtTime(320, now);
+                
+                const sweepOsc = ctx.createOscillator();
+                sweepOsc.type = 'sine';
+                sweepOsc.frequency.value = 0.08;
+                const sweepGain = ctx.createGain();
+                sweepGain.gain.value = 160;
+                
+                windNode.connect(windFilter);
+                sweepOsc.connect(sweepGain);
+                sweepGain.connect(windFilter.frequency);
+                
+                const windGainNode = ctx.createGain();
+                windGainNode.gain.setValueAtTime(0.032, now);
+                windFilter.connect(windGainNode);
+                windGainNode.connect(this.masterGain || ctx.destination);
+                
+                windNode.start(now);
+                sweepOsc.start(now);
+                
+                this.ambientOscs.push(windNode, sweepOsc, windGainNode);
+                
+            } else if (missionId === 3 || missionId === 4) { // Mainframe Server Hum & static sparks
+                const osc50 = ctx.createOscillator();
+                osc50.type = 'sine';
+                osc50.frequency.value = 50; // Mains electric noise hum
+                
+                const osc120 = ctx.createOscillator();
+                osc120.type = 'sine';
+                osc120.frequency.value = 120; // Server cooling fans
+                
+                const humGain = ctx.createGain();
+                humGain.gain.setValueAtTime(0.015, now);
+                
+                osc50.connect(humGain);
+                osc120.connect(humGain);
+                humGain.connect(this.masterGain || ctx.destination);
+                
+                osc50.start(now);
+                osc120.start(now);
+                
+                this.ambientOscs.push(osc50, osc120, humGain);
+            }
+        } catch (ambientErr) {
+            console.error("Failed to generate dynamic environmental ambient audio", ambientErr);
         }
     }
 
@@ -455,9 +527,9 @@ class AudioManager {
         
         let pitchMod = 1.0;
         let volumeMod = 1.0;
-        if (['shoot', 'silenced', 'step', 'hit', 'die'].includes(type)) {
-            pitchMod = 0.92 + Math.random() * 0.16; // Pitch randomized +/- 8%
-            volumeMod = 0.85 + Math.random() * 0.3;  // Volume randomized +/- 15%
+        if (['shoot', 'silenced', 'step', 'hit', 'die'].includes(type) && Math.random) {
+            pitchMod = 0.92 + Math.random() * 0.16;
+            volumeMod = 0.85 + Math.random() * 0.3;
         }
 
         // Acoustic Obstacle low-pass filter (Audio Occlusion)
@@ -465,12 +537,11 @@ class AudioManager {
         if (sourceX !== undefined && sourceY !== undefined && window.game) {
             const listener = window.game.selectedEntity;
             if (listener) {
-                // If there's no clear Line of Sight, muffle the audio through blocks/walls (low-pass filter)
                 const hasLoS = window.game.checkLoS(listener.x, listener.y, sourceX, sourceY);
                 if (!hasLoS) {
                     occludedFilter = ctx.createBiquadFilter();
                     occludedFilter.type = 'lowpass';
-                    occludedFilter.frequency.setValueAtTime(380, now); // absorptive material feel
+                    occludedFilter.frequency.setValueAtTime(380, now); // absorb acoustics
                     occludedFilter.Q.value = 1.2;
                 }
             }
@@ -486,8 +557,6 @@ class AudioManager {
         const wetGain = ctx.createGain();
         wetGain.gain.setValueAtTime(0.25, now);
 
-        // Connections chain: Osc -> [Occlusion Filter] -> mainGain -> dryGain -> Output
-        //                                                    -> wetGain -> Reverb convolver Node
         if (occludedFilter) {
             osc.connect(occludedFilter);
             occludedFilter.connect(mainGain);
@@ -496,96 +565,100 @@ class AudioManager {
         }
         
         mainGain.connect(dryGain);
-        dryGain.connect(ctx.destination);
+        dryGain.connect(this.masterGain || ctx.destination);
         
         if (this.reverbNode) {
             mainGain.connect(wetGain);
             wetGain.connect(this.reverbNode);
         }
 
-        if (type === 'shoot') {
-            osc.type = 'square';
-            osc.frequency.setValueAtTime(150 * pitchMod, now);
-            osc.frequency.exponentialRampToValueAtTime(0.01, now + 0.1);
-            mainGain.gain.setValueAtTime(0.3 * volumeMod, now);
-            mainGain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
-            osc.start(now);
-            osc.stop(now + 0.1);
-        } else if (type === 'silenced') {
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(300 * pitchMod, now);
-            osc.frequency.exponentialRampToValueAtTime(0.01, now + 0.05);
-            mainGain.gain.setValueAtTime(0.12 * volumeMod, now);
-            mainGain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
-            osc.start(now);
-            osc.stop(now + 0.05);
-        } else if (type === 'step') {
-            osc.type = 'triangle';
-            osc.frequency.setValueAtTime(50 * pitchMod, now);
-            osc.frequency.exponentialRampToValueAtTime(0.01, now + 0.05);
-            mainGain.gain.setValueAtTime(0.06 * volumeMod, now);
-            mainGain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
-            osc.start(now);
-            osc.stop(now + 0.05);
-        } else if (type === 'hit') {
-            osc.type = 'sawtooth';
-            osc.frequency.setValueAtTime(40 * pitchMod, now);
-            osc.frequency.exponentialRampToValueAtTime(0.01, now + 0.2);
-            mainGain.gain.setValueAtTime(0.4 * volumeMod, now);
-            mainGain.gain.linearRampToValueAtTime(0.01, now + 0.2);
-            osc.start(now);
-            osc.stop(now + 0.2);
-        } else if (type === 'die') {
-            osc.type = 'sawtooth';
-            osc.frequency.setValueAtTime(80 * pitchMod, now);
-            osc.frequency.exponentialRampToValueAtTime(10, now + 0.5);
-            mainGain.gain.setValueAtTime(0.5 * volumeMod, now);
-            mainGain.gain.linearRampToValueAtTime(0.01, now + 0.5);
-            osc.start(now);
-            osc.stop(now + 0.5);
-        } else if (type === 'upgrade') {
-            osc.type = 'sawtooth';
-            osc.frequency.setValueAtTime(150, now);
-            osc.frequency.exponentialRampToValueAtTime(900, now + 0.35);
-            mainGain.gain.setValueAtTime(0.2, now);
-            mainGain.gain.linearRampToValueAtTime(0.01, now + 0.35);
-            
-            const osc2 = ctx.createOscillator();
-            const gain2 = ctx.createGain();
-            osc2.connect(gain2);
-            gain2.connect(ctx.destination);
-            osc2.type = 'square';
-            osc2.frequency.setValueAtTime(80, now);
-            gain2.gain.setValueAtTime(0.25, now);
-            gain2.gain.linearRampToValueAtTime(0.01, now + 0.12);
-            osc2.start(now);
-            osc2.stop(now + 0.12);
-            
-            osc.start(now);
-            osc.stop(now + 0.35);
-        } else if (type === 'radio_beep') {
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(800, now);
-            osc.frequency.setValueAtTime(1100, now + 0.04);
-            mainGain.gain.setValueAtTime(0.08, now);
-            mainGain.gain.linearRampToValueAtTime(0.01, now + 0.08);
-            osc.start(now);
-            osc.stop(now + 0.08);
-            
-            const bufSize = ctx.sampleRate * 0.14; 
-            const buffer = ctx.createBuffer(1, bufSize, ctx.sampleRate);
-            const data = buffer.getChannelData(0);
-            for (let i = 0; i < bufSize; i++) {
-                data[i] = (Math.random() * 2 - 1) * 0.035;
+        try {
+            if (type === 'shoot') {
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(150 * pitchMod, now);
+                osc.frequency.exponentialRampToValueAtTime(0.01, now + 0.1);
+                mainGain.gain.setValueAtTime(0.35 * volumeMod, now);
+                mainGain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                osc.start(now);
+                osc.stop(now + 0.1);
+            } else if (type === 'silenced') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(300 * pitchMod, now);
+                osc.frequency.exponentialRampToValueAtTime(0.01, now + 0.05);
+                mainGain.gain.setValueAtTime(0.18 * volumeMod, now);
+                mainGain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+                osc.start(now);
+                osc.stop(now + 0.05);
+            } else if (type === 'step') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(55 * pitchMod, now);
+                osc.frequency.exponentialRampToValueAtTime(0.01, now + 0.05);
+                mainGain.gain.setValueAtTime(0.10 * volumeMod, now);
+                mainGain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+                osc.start(now);
+                osc.stop(now + 0.05);
+            } else if (type === 'hit') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(45 * pitchMod, now);
+                osc.frequency.exponentialRampToValueAtTime(0.01, now + 0.2);
+                mainGain.gain.setValueAtTime(0.45 * volumeMod, now);
+                mainGain.gain.linearRampToValueAtTime(0.01, now + 0.2);
+                osc.start(now);
+                osc.stop(now + 0.2);
+            } else if (type === 'die') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(80 * pitchMod, now);
+                osc.frequency.exponentialRampToValueAtTime(10, now + 0.5);
+                mainGain.gain.setValueAtTime(0.55 * volumeMod, now);
+                mainGain.gain.linearRampToValueAtTime(0.01, now + 0.5);
+                osc.start(now);
+                osc.stop(now + 0.5);
+            } else if (type === 'upgrade') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(150, now);
+                osc.frequency.exponentialRampToValueAtTime(900, now + 0.35);
+                mainGain.gain.setValueAtTime(0.25, now);
+                mainGain.gain.linearRampToValueAtTime(0.01, now + 0.35);
+                
+                const osc2 = ctx.createOscillator();
+                const gain2 = ctx.createGain();
+                osc2.connect(gain2);
+                gain2.connect(this.masterGain || ctx.destination);
+                osc2.type = 'square';
+                osc2.frequency.setValueAtTime(80, now);
+                gain2.gain.setValueAtTime(0.28, now);
+                gain2.gain.linearRampToValueAtTime(0.01, now + 0.12);
+                osc2.start(now);
+                osc2.stop(now + 0.12);
+                
+                osc.start(now);
+                osc.stop(now + 0.35);
+            } else if (type === 'radio_beep') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, now);
+                osc.frequency.setValueAtTime(1100, now + 0.04);
+                mainGain.gain.setValueAtTime(0.12, now);
+                mainGain.gain.linearRampToValueAtTime(0.01, now + 0.08);
+                osc.start(now);
+                osc.stop(now + 0.08);
+                
+                const bufSize = ctx.sampleRate * 0.14; 
+                const buffer = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufSize; i++) {
+                    data[i] = (Math.random() * 2 - 1) * 0.035;
+                }
+                const noise = ctx.createBufferSource();
+                noise.buffer = buffer;
+                const noiseGain = ctx.createGain();
+                noiseGain.gain.setValueAtTime(1.0, now);
+                noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.14);
+                noise.connect(noiseGain);
+                noiseGain.connect(this.masterGain || ctx.destination);
+                noise.start(now);
             }
-            const noise = ctx.createBufferSource();
-            noise.buffer = buffer;
-            const noiseGain = ctx.createGain();
-            noiseGain.gain.setValueAtTime(1.0, now);
-            noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.14);
-            noise.connect(noiseGain);
-            noiseGain.connect(ctx.destination);
-            noise.start(now);
+        } catch (soundErr) {
+            console.error("Oscillator synthesizer trigger failure", soundErr);
         }
     }
 
