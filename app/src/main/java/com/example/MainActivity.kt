@@ -13,23 +13,18 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.Log
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import com.example.ui.theme.MyApplicationTheme
 import java.io.File
 
 class MainActivity : ComponentActivity(), SensorEventListener {
@@ -87,15 +82,63 @@ class MainActivity : ComponentActivity(), SensorEventListener {
             getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
         }
         
-        enableEdgeToEdge()
-        
-        setContent {
-            MyApplicationTheme {
-                GameScreen(onWebViewCreated = { createdWebView ->
-                    this@MainActivity.webView = createdWebView
-                })
+        // Direct, high-performance native WebView initialization
+        val webViewInstance = WebView(this).apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            
+            WebView.setWebContentsDebuggingEnabled(true)
+            
+            @SuppressLint("SetJavaScriptEnabled")
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.allowFileAccess = true
+            settings.allowFileAccessFromFileURLs = true
+            settings.allowUniversalAccessFromFileURLs = true
+            settings.mediaPlaybackRequiresUserGesture = false
+            settings.databaseEnabled = true
+            settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+            settings.setSupportMultipleWindows(false)
+            settings.javaScriptCanOpenWindowsAutomatically = false
+            
+            // Critical full-viewport consistency settings for tactile action/3D games
+            settings.textZoom = 100
+            settings.useWideViewPort = true
+            settings.loadWithOverviewMode = true
+            
+            setLayerType(View.LAYER_TYPE_HARDWARE, null)
+            
+            settings.allowContentAccess = true
+            settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+            
+            webViewClient = WebViewClient()
+            
+            webChromeClient = object : WebChromeClient() {
+                override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
+                    Log.d("WebViewJS", "${consoleMessage.message()} -- From line ${consoleMessage.lineNumber()} of ${consoleMessage.sourceId()}")
+                    return true
+                }
             }
+            
+            addJavascriptInterface(WebAppInterface(), "Android")
+            loadUrl("file:///android_asset/index.html")
         }
+        
+        this.webView = webViewInstance
+        
+        // Embed the WebView inside a solid black full-screen FrameLayout container
+        val rootLayout = FrameLayout(this).apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            setBackgroundColor(android.graphics.Color.BLACK)
+            addView(webViewInstance)
+        }
+        
+        setContentView(rootLayout)
         
         hideSystemUI()
     }
@@ -276,46 +319,4 @@ class MainActivity : ComponentActivity(), SensorEventListener {
     }
 }
 
-@SuppressLint("SetJavaScriptEnabled")
-@Composable
-fun GameScreen(onWebViewCreated: (WebView) -> Unit) {
-    AndroidView(
-        factory = { context ->
-            WebView.setWebContentsDebuggingEnabled(true)
-            WebView(context).apply {
-                settings.javaScriptEnabled = true
-                settings.domStorageEnabled = true
-                settings.allowFileAccess = true
-                settings.allowFileAccessFromFileURLs = true
-                settings.allowUniversalAccessFromFileURLs = true
-                settings.mediaPlaybackRequiresUserGesture = false
-                settings.databaseEnabled = true
-                settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
-                settings.setSupportMultipleWindows(false)
-                settings.javaScriptCanOpenWindowsAutomatically = false
-                
-                setLayerType(View.LAYER_TYPE_HARDWARE, null)
-                
-                settings.allowContentAccess = true
-                settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                
-                webViewClient = WebViewClient()
-                
-                webChromeClient = object : WebChromeClient() {
-                    override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
-                        Log.e("WebViewJS", "${consoleMessage.message()} -- From line ${consoleMessage.lineNumber()} of ${consoleMessage.sourceId()}")
-                        return true
-                    }
-                }
-                
-                addJavascriptInterface((context as MainActivity).WebAppInterface(), "Android")
-                
-                // Invoke callback to pass WebView reference to MainActivity lifecycles
-                onWebViewCreated(this)
-                
-                loadUrl("file:///android_asset/index.html")
-            }
-        },
-        modifier = Modifier.fillMaxSize()
-    )
-}
+
