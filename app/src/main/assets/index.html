@@ -30,6 +30,25 @@
     </script>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #000; font-family: 'Courier New', Courier, monospace; color: #0f0; }
+        
+        /* Special AMOLED absolute depth visuals - saves battery on Mix 4 and increases visibility */
+        body.amoled-enabled .overlay-screen, 
+        body.amoled-enabled #intro-screen, 
+        body.amoled-enabled #main-menu, 
+        body.amoled-enabled #settings-screen, 
+        body.amoled-enabled #briefing-screen, 
+        body.amoled-enabled #debriefing-screen, 
+        body.amoled-enabled #intel-screen, 
+        body.amoled-enabled #barracks-screen {
+            background-color: #000000 !important;
+            background-image: none !important;
+        }
+        body.amoled-enabled .overlay-content {
+            background: #000000 !important;
+            border-color: #00ffaa !important;
+            box-shadow: 0 0 25px rgba(0, 255, 170, 0.45) !important;
+        }
+        
         #game-container { width: 100%; height: 100%; position: relative; touch-action: none; display: none; }
         canvas { display: block; width: 100%; height: 100%; touch-action: none;}
         
@@ -390,6 +409,10 @@
                 <label style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                     ВИЗУАЛЬНЫЕ ЭФФЕКТЫ (VFX):
                     <input type="checkbox" id="vfx-toggle" checked onchange="appState.updateSettings()" style="transform: scale(1.5);">
+                </label>
+                <label style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border: 1px dashed rgba(0, 255, 170, 0.3); padding: 5px; border-radius: 4px;">
+                    <span style="color: #00ffaa; font-weight: bold; font-size: 11px;">PURE AMOLED BLACK (MIX 4):</span>
+                    <input type="checkbox" id="amoled-toggle" checked onchange="appState.updateSettings()" style="transform: scale(1.5);">
                 </label>
                 
                 <hr style="border: 1px solid #005a3c; margin: 15px 0;">
@@ -1889,6 +1912,21 @@ class Game {
         }
         this.triggerCameraShake(recoilPower);
         
+        // Dynamic tactile gun recoil response for native Android players
+        if (attacker.type === 'player' && window.Android && typeof window.Android.vibrate === 'function') {
+            try {
+                if (recoilPower >= 0.7) {
+                    window.Android.vibrate('heavy');
+                } else if (recoilPower >= 0.4) {
+                    window.Android.vibrate('medium');
+                } else {
+                    window.Android.vibrate('light');
+                }
+            } catch (vErr) {
+                console.warn("Gun recoil vibration failed", vErr);
+            }
+        }
+        
         if (roll <= finalAccuracy) {
             let effArmor = Math.max(0, (target.armor || 0) - wpnPen);
             let damage = Math.max(0, wpnDmg - effArmor);
@@ -1924,6 +1962,20 @@ class Game {
             }
 
             target.hp -= damage;
+            
+            // Dynamic combat haptic responses (Hitmarker feedback vs Damage shake)
+            if (window.Android && typeof window.Android.vibrate === 'function') {
+                try {
+                    if (target.type === 'player') {
+                        window.Android.vibrate('heavy'); // Heavy tactical alert rumble
+                    } else if (attacker.type === 'player') {
+                        window.Android.vibrate('light'); // Fast clean click-back for hit confirmation
+                    }
+                } catch (vErr) {
+                    console.warn("Combat trigger vibration failed", vErr);
+                }
+            }
+            
             this.applyImpactRebound(target, attacker.x, attacker.y, 1.45);
 
             // Perks: Shredder (breacher shreds 10 target armor on-hit)
@@ -4481,10 +4533,15 @@ const appState = {
             document.getElementById('settings-screen').style.display = 'flex';
             
             // Set up input values based on current globalSettings
-            const settings = window.globalSettings || { volume: 1.0, vfxEnabled: true, gyroEnabled: false, gyroSensitivity: 1.0 };
+            const settings = window.globalSettings || { volume: 1.0, vfxEnabled: true, amoledMode: true, gyroEnabled: false, gyroSensitivity: 1.0 };
             document.getElementById('volume-slider').value = settings.volume;
             document.getElementById('vol-lbl').innerText = Math.round(settings.volume * 100) + '%';
             document.getElementById('vfx-toggle').checked = settings.vfxEnabled;
+            
+            const amoledToggle = document.getElementById('amoled-toggle');
+            if (amoledToggle) {
+                amoledToggle.checked = settings.amoledMode !== false;
+            }
             
             const gyroToggle = document.getElementById('gyro-toggle');
             const gyroSensSlider = document.getElementById('gyro-sensitivity-slider');
@@ -4919,6 +4976,9 @@ const appState = {
         if (volLbl) volLbl.innerText = Math.round(vol * 100) + '%';
         
         const vfx = document.getElementById('vfx-toggle').checked;
+        const amoledToggle = document.getElementById('amoled-toggle');
+        const amoledEnabled = amoledToggle ? amoledToggle.checked : true;
+        
         const gyroToggle = document.getElementById('gyro-toggle');
         const gyroSensSlider = document.getElementById('gyro-sensitivity-slider');
         const gyroSensLbl = document.getElementById('gyro-sens-lbl');
@@ -4934,9 +4994,17 @@ const appState = {
         window.globalSettings = {
             volume: parseFloat(vol),
             vfxEnabled: vfx,
+            amoledMode: amoledEnabled,
             gyroEnabled: gyroEnabled,
             gyroSensitivity: gyroSens
         };
+        
+        // Set document.body class to apply AMOLED CSS overrides
+        if (amoledEnabled) {
+            document.body.classList.add('amoled-enabled');
+        } else {
+            document.body.classList.remove('amoled-enabled');
+        }
         
         // Save settings to LocalStorage so they are persisted across launches
         window.safeLocalStorage.setItem('shadowProtocolSettings', JSON.stringify(window.globalSettings));
@@ -5215,17 +5283,36 @@ const appState = {
 
 window.onload = () => {
     window.appState = appState;
-    // Load persisted settings or fall back to high-fidelity defaults
+    // Load persisted settings or fall back to high-fidelity defaults (AMOLED-enabled by default for Mi Mix 4 display depth!)
     const persisted = window.safeLocalStorage.getItem('shadowProtocolSettings');
     if (persisted) {
         try {
             window.globalSettings = JSON.parse(persisted);
         } catch(e) {
-            window.globalSettings = { volume: 1.0, vfxEnabled: true, gyroEnabled: false, gyroSensitivity: 1.0 };
+            window.globalSettings = { volume: 1.0, vfxEnabled: true, amoledMode: true, gyroEnabled: false, gyroSensitivity: 1.0 };
         }
     } else {
-        window.globalSettings = { volume: 1.0, vfxEnabled: true, gyroEnabled: false, gyroSensitivity: 1.0 };
+        window.globalSettings = { volume: 1.0, vfxEnabled: true, amoledMode: true, gyroEnabled: false, gyroSensitivity: 1.0 };
     }
+    
+    // Apply AMOLED absolute black canvas theme
+    if (window.globalSettings.amoledMode !== false) {
+        document.body.classList.add('amoled-enabled');
+    } else {
+        document.body.classList.remove('amoled-enabled');
+    }
+    
+    // Register premium tactile haptic click listener for linear motor devices (Intercepts buttons, sliders, input labels)
+    document.body.addEventListener('click', (e) => {
+        const actionableBtn = e.target.closest('button, .btn, .tab-btn, .mission-card, .setting-row, input, label');
+        if (actionableBtn && window.Android && typeof window.Android.vibrate === 'function') {
+            try {
+                window.Android.vibrate('light');
+            } catch (vErr) {
+                console.warn("Bridge vibration failed", vErr);
+            }
+        }
+    });
     
     // Broadcast loaded settings to native bridge
     if (window.Android) {

@@ -122,11 +122,35 @@ class MainActivity : ComponentActivity(), SensorEventListener {
                 }
             }
             
+            // Optimizations for modern 90Hz/120Hz Snapdragon devices (like Xiaomi MIX 4)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                try {
+                    requestUnbufferedDispatch(android.view.InputDevice.SOURCE_TOUCHSCREEN)
+                    Log.d("SystemOptimization", "Enabled unbuffered touchscreen input dispatching for lowest control latency")
+                } catch (e: Exception) {
+                    Log.e("SystemOptimization", "unbuffered dispatch error: ${e.message}")
+                }
+            }
+            
             addJavascriptInterface(WebAppInterface(), "Android")
             loadUrl("file:///android_asset/index.html")
         }
         
         this.webView = webViewInstance
+        
+        // Dynamic Refresh Rate Optimization for modern displays (such as 120Hz panel on Mi Mix 4 running Android 14)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            try {
+                display?.supportedModes?.maxByOrNull { it.refreshRate }?.let { bestMode ->
+                    val lp = window.attributes
+                    lp.preferredDisplayModeId = bestMode.modeId
+                    window.attributes = lp
+                    Log.d("SystemOptimization", "Configured High Refresh Rate Display Mode: ${bestMode.refreshRate} Hz")
+                }
+            } catch (e: Exception) {
+                Log.e("SystemOptimization", "Display refresh rate optimization failed: ${e.message}")
+            }
+        }
         
         // Embed the WebView inside a solid black full-screen FrameLayout container
         val rootLayout = FrameLayout(this).apply {
@@ -279,6 +303,22 @@ class MainActivity : ComponentActivity(), SensorEventListener {
 
         @JavascriptInterface
         fun vibrate(type: String) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && vibrator?.hasVibrator() == true) {
+                try {
+                    val effectId = when (type) {
+                        "light" -> VibrationEffect.EFFECT_TICK
+                        "medium" -> VibrationEffect.EFFECT_CLICK
+                        "heavy" -> VibrationEffect.EFFECT_HEAVY_CLICK
+                        else -> VibrationEffect.EFFECT_CLICK
+                    }
+                    vibrator?.vibrate(VibrationEffect.createPredefined(effectId))
+                    return
+                } catch (e: Exception) {
+                    Log.e("SystemOptimization", "Predefined vibration effect failed: ${e.message}")
+                }
+            }
+            
+            // Legacy fall-back
             val ms = when (type) {
                 "light" -> 15L
                 "medium" -> 45L
