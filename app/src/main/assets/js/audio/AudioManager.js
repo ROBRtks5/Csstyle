@@ -16,29 +16,39 @@ class AudioManager {
         this.reverbNode = null;
         this.reverbGain = null;
         this.ambientOscs = [];
+        this.ambientSynthNodes = [];
         this.heartbeatInterval = null;
     }
 
     init() {
         if (!this.ctx) {
-            const AudioContext = window.AudioContext || window.webkitAudioContext;
-            if (AudioContext) {
-                this.ctx = new AudioContext();
-                this.startAmbient();
-                
-                this.combatGain = this.ctx.createGain();
-                this.combatGain.gain.value = 0; // Silent initially
-                this.combatGain.connect(this.ctx.destination);
-                
-                this.initReverb();
-                this.initHeartbeatLoop();
-                
-                this.nextNoteTime = this.ctx.currentTime + 0.1;
-                this.scheduler();
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (AudioContext) {
+                    this.ctx = new AudioContext();
+                    this.startAmbient();
+                    
+                    this.combatGain = this.ctx.createGain();
+                    this.combatGain.gain.value = 0; // Silent initially
+                    this.combatGain.connect(this.ctx.destination);
+                    
+                    this.initReverb();
+                    this.initHeartbeatLoop();
+                    
+                    this.nextNoteTime = this.ctx.currentTime + 0.1;
+                    this.scheduler();
+                }
+            } catch (e) {
+                console.error("AudioContext initialization failed", e);
+                this.ctx = null;
             }
         }
         if (this.ctx && this.ctx.state === 'suspended') {
-            this.ctx.resume().catch(e => console.warn("Context resume failed due to interaction constraints", e));
+            try {
+                this.ctx.resume().catch(e => console.warn("Context resume failed due to interaction constraints", e));
+            } catch (err) {
+                console.warn("Context resume execution failed", err);
+            }
         }
     }
 
@@ -263,7 +273,7 @@ class AudioManager {
         
         osc.type = 'sine';
         osc.frequency.value = 45; // Subwoofer rumble
-        this.ambientGain.gain.value = 0.1;
+        this.ambientGain.gain.setValueAtTime(0.08, this.ctx.currentTime);
         
         // LF0 modulator for subtle breathing movement in background
         const lfo = this.ctx.createOscillator();
@@ -272,12 +282,63 @@ class AudioManager {
         lfoGain.connect(this.ambientGain.gain);
         lfo.type = 'sine';
         lfo.frequency.value = 0.1; // Ultra-slow LFO swing
-        lfoGain.gain.value = 0.05;
+        lfoGain.gain.value = 0.03;
         
-        osc.start();
-        lfo.start();
+        try {
+            osc.start();
+            lfo.start();
+        } catch(e) {
+            console.warn("Error starting base ambient drone oscillators", e);
+        }
         
         this.ambientOscs = [];
+        this.ambientSynthNodes = [];
+
+        // Procedural sci-fi tension ambient synthesizer pad (perfectly audible but non-intrusive)
+        // plays a beautiful raw fifth/octave chord in mid frequencies which represent tension
+        const notes = [110, 165, 220]; // A2 (110Hz), E3 (165Hz), A3 (220Hz)
+        try {
+            const ctx = this.ctx;
+            notes.forEach((freq, idx) => {
+                const padOsc = ctx.createOscillator();
+                const padGain = ctx.createGain();
+                const padLfo = ctx.createOscillator();
+                const padLfoGain = ctx.createGain();
+                
+                padOsc.type = 'triangle';
+                padOsc.frequency.setValueAtTime(freq, ctx.currentTime);
+                
+                // Random detune for thick synthesizer analog warmth
+                padOsc.detune.setValueAtTime((Math.random() * 10) - 5, ctx.currentTime);
+                
+                const padFilter = ctx.createBiquadFilter();
+                padFilter.type = 'lowpass';
+                padFilter.frequency.setValueAtTime(400 + idx * 70, ctx.currentTime);
+                padFilter.Q.value = 2.5;
+                
+                // Breathing sweep modulator
+                padLfo.frequency.setValueAtTime(0.05 + idx * 0.02, ctx.currentTime);
+                padLfoGain.gain.setValueAtTime(100, ctx.currentTime);
+                
+                padLfo.connect(padLfoGain);
+                padLfoGain.connect(padFilter.frequency);
+                
+                padOsc.connect(padFilter);
+                padFilter.connect(padGain);
+                padGain.connect(this.ambientGain);
+                
+                // Slowly swell the master volume up
+                padGain.gain.setValueAtTime(0, ctx.currentTime);
+                padGain.gain.linearRampToValueAtTime(0.035 / notes.length, ctx.currentTime + 3.0);
+                
+                padOsc.start();
+                padLfo.start();
+                
+                this.ambientSynthNodes.push(padOsc, padLfo, padGain, padFilter);
+            });
+        } catch (padErr) {
+            console.error("Procedural pad synthesizer generation failed", padErr);
+        }
     }
 
     setMissionAmbient(missionId) {
@@ -525,6 +586,33 @@ class AudioManager {
             noise.connect(noiseGain);
             noiseGain.connect(ctx.destination);
             noise.start(now);
+        }
+    }
+
+    stopAll() {
+        try {
+            if (this.heartbeatInterval) {
+                clearInterval(this.heartbeatInterval);
+                this.heartbeatInterval = null;
+            }
+            if (this.timerID) {
+                clearTimeout(this.timerID);
+                this.timerID = null;
+            }
+            if (this.ambientOscs) {
+                this.ambientOscs.forEach(o => { try { o.stop(); o.disconnect(); } catch(e){} });
+                this.ambientOscs = [];
+            }
+            if (this.ambientSynthNodes) {
+                this.ambientSynthNodes.forEach(o => { try { o.stop(); o.disconnect(); } catch(e){} });
+                this.ambientSynthNodes = [];
+            }
+            if (this.ctx) {
+                this.ctx.close().catch(e => console.warn("AudioContext closing failed", e));
+                this.ctx = null;
+            }
+        } catch(e) {
+            console.warn("stopAll failed gracefully", e);
         }
     }
 }

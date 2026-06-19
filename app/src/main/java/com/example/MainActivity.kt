@@ -27,6 +27,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.example.ui.theme.MyApplicationTheme
+import java.io.File
 
 class MainActivity : ComponentActivity(), SensorEventListener {
     private lateinit var sensorManager: SensorManager
@@ -40,10 +41,35 @@ class MainActivity : ComponentActivity(), SensorEventListener {
     private var isGyroEnabled = false
     private var gyroSensitivity = 1.0f
 
+    // Gyroscope calibration/drift parameters
+    private var gyroPitchBias = 0f
+    private var gyroYawBias = 0f
+    private var calibrationSamples = 0
+    @Volatile
+    private var isCalibrating = false
+    private var calibrationPitchSum = 0f
+    private var calibrationYawSum = 0f
+
     private var vibrator: Vibrator? = null
+    private var webView: WebView? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Ensure WebView Javascript/Code-Cache directory exists to prevent Chromium errors/warnings
+        try {
+            val codeCacheDir = File(cacheDir, "WebView/Default/HTTP Cache/Code Cache")
+            val jsDir = File(codeCacheDir, "js")
+            if (!jsDir.exists()) {
+                jsDir.mkdirs()
+            }
+            val wasmDir = File(codeCacheDir, "wasm")
+            if (!wasmDir.exists()) {
+                wasmDir.mkdirs()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
         
         // Initialize sensors
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
@@ -62,7 +88,9 @@ class MainActivity : ComponentActivity(), SensorEventListener {
         
         setContent {
             MyApplicationTheme {
-                GameScreen()
+                GameScreen(onWebViewCreated = { createdWebView ->
+                    this@MainActivity.webView = createdWebView
+                })
             }
         }
         
@@ -74,11 +102,15 @@ class MainActivity : ComponentActivity(), SensorEventListener {
         if (isGyroEnabled) {
             registerGyroscope()
         }
+        webView?.onResume()
+        webView?.resumeTimers()
     }
 
     override fun onPause() {
         super.onPause()
         unregisterGyroscope()
+        webView?.onPause()
+        webView?.pauseTimers()
     }
 
     private fun registerGyroscope() {
@@ -108,11 +140,34 @@ class MainActivity : ComponentActivity(), SensorEventListener {
     // SensorEventListener methods
     override fun onSensorChanged(event: SensorEvent) {
         if (event.sensor.type == Sensor.TYPE_GYROSCOPE) {
-            // Tilting forward/backward is rotation about local X-axis (values[0])
-            // Tilting left/right (yawing in landscape) is rotation about local Y-axis (values[1])
+            val rawPitch = event.values[0]
+            val rawYaw = event.values[1]
+
             synchronized(this) {
-                gyroPitchSum += event.values[0] * gyroSensitivity
-                gyroYawSum += event.values[1] * gyroSensitivity
+                if (isCalibrating) {
+                    calibrationPitchSum += rawPitch
+                    calibrationYawSum += rawYaw
+                    calibrationSamples++
+                    if (calibrationSamples >= 60) { // ~1 second of samples at SENSOR_DELAY_GAME
+                        gyroPitchBias = calibrationPitchSum / calibrationSamples
+                        gyroYawBias = calibrationYawSum / calibrationSamples
+                        isCalibrating = false
+                        calibrationSamples = 0
+                    }
+                    return
+                }
+
+                // Apply dynamic drift calibration (subtract the baseline rest noise)
+                val calibratedPitch = rawPitch - gyroPitchBias
+                val calibratedYaw = rawYaw - gyroYawBias
+
+                // Apply a tiny threshold deadzone to completely stop micro-drift when holding / resting still
+                val gyroDeadzone = 0.006f
+                val filteredPitch = if (Math.abs(calibratedPitch) > gyroDeadzone) calibratedPitch else 0f
+                val filteredYaw = if (Math.abs(calibratedYaw) > gyroDeadzone) calibratedYaw else 0f
+
+                gyroPitchSum += filteredPitch * gyroSensitivity
+                gyroYawSum += filteredYaw * gyroSensitivity
             }
         }
     }
@@ -151,6 +206,16 @@ class MainActivity : ComponentActivity(), SensorEventListener {
         @JavascriptInterface
         fun hasGyroscope(): Boolean {
             return gyroscopeSensor != null
+        }
+
+        @JavascriptInterface
+        fun calibrateGyro() {
+            synchronized(this@MainActivity) {
+                calibrationPitchSum = 0f
+                calibrationYawSum = 0f
+                calibrationSamples = 0
+                isCalibrating = true
+            }
         }
 
         @JavascriptInterface
@@ -210,7 +275,7 @@ class MainActivity : ComponentActivity(), SensorEventListener {
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-fun GameScreen() {
+fun GameScreen(onWebViewCreated: (WebView) -> Unit) {
     AndroidView(
         factory = { context ->
             WebView(context).apply {
@@ -232,6 +297,9 @@ fun GameScreen() {
                 webViewClient = WebViewClient()
                 
                 addJavascriptInterface((context as MainActivity).WebAppInterface(), "Android")
+                
+                // Invoke callback to pass WebView reference to MainActivity lifecycles
+                onWebViewCreated(this)
                 
                 loadUrl("file:///android_asset/index.html")
             }
