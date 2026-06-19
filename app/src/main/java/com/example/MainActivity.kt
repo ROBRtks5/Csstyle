@@ -11,9 +11,12 @@ import android.os.Bundle
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.util.Log
 import android.view.View
 import android.view.WindowManager
+import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
@@ -278,6 +281,7 @@ class MainActivity : ComponentActivity(), SensorEventListener {
 fun GameScreen(onWebViewCreated: (WebView) -> Unit) {
     AndroidView(
         factory = { context ->
+            WebView.setWebContentsDebuggingEnabled(true)
             WebView(context).apply {
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
@@ -293,8 +297,16 @@ fun GameScreen(onWebViewCreated: (WebView) -> Unit) {
                 setLayerType(View.LAYER_TYPE_HARDWARE, null)
                 
                 settings.allowContentAccess = true
+                settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                 
                 webViewClient = WebViewClient()
+                
+                webChromeClient = object : WebChromeClient() {
+                    override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
+                        Log.e("WebViewJS", "${consoleMessage.message()} -- From line ${consoleMessage.lineNumber()} of ${consoleMessage.sourceId()}")
+                        return true
+                    }
+                }
                 
                 addJavascriptInterface((context as MainActivity).WebAppInterface(), "Android")
                 

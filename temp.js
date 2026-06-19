@@ -1,4 +1,22 @@
 
+window.safeLocalStorage = {
+    getItem: function(key) {
+        try {
+            return localStorage.getItem(key);
+        } catch(e) {
+            console.warn("localStorage.getItem failed", e);
+            return null;
+        }
+    },
+    setItem: function(key, value) {
+        try {
+            localStorage.setItem(key, value);
+        } catch(e) {
+            console.warn("localStorage.setItem failed", e);
+        }
+    }
+};
+
 const WEAPONS = {
     'MP-10 SD': { damage: 35, pen: 15, acc: 85, silenced: true, suppression: 5 },
     'MG-60': { damage: 50, pen: 25, acc: 70, silenced: false, suppression: 40 },
@@ -221,7 +239,13 @@ class Game {
         this.camera.position.set(150, 200, 150);
         this.camera.lookAt((GRID_W * TILE_SIZE) / 2, 0, (GRID_H * TILE_SIZE) / 2);
 
-        this.renderer = new THREE.WebGLRenderer({ antialias: true });
+        try {
+            this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        } catch(e) {
+            console.error("WebGL Init Err", e);
+            document.body.innerHTML = "<div style='color:red; background:black; padding:20px; text-align:center; height:100vh; display:flex; flex-direction:column; justify-content:center;'><h1>FATAL ERROR: WebGL failed to initialize</h1><p>" + e.message + "</p></div>";
+            return;
+        }
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.renderer.setClearColor(0x020304); // Darker, cinematic background
         this.renderer.shadowMap.enabled = true;
@@ -1536,7 +1560,7 @@ class Game {
                 alert: e.alert, sightRadius: e.sightRadius, hearingRadius: e.hearingRadius, lastKnownTarget: e.lastKnownTarget
             }))
         };
-        localStorage.setItem('shadowProtocolSave', JSON.stringify(state));
+        window.safeLocalStorage.setItem('shadowProtocolSave', JSON.stringify(state));
         logMessage(`[СИСТЕМА] Прогресс сохранен.`, 'log-turn');
     }
 
@@ -3755,6 +3779,33 @@ const appState = {
     currentBarracksOpId: 'op1',
     currentBarracksTab: 'stats',
     
+    dismissIntro: function() {
+        // Init Audio on first user interaction
+        try {
+            if (!window.menuAudioManager) {
+                window.menuAudioManager = new AudioManager();
+            }
+            window.menuAudioManager.init();
+            window.menuAudioManager.setMissionAmbient('intro');
+            window.menuAudioManager.startAmbient();
+            window.menuAudioManager.playSound('silenced');
+        } catch(e) {
+            console.error(e);
+        }
+
+        document.getElementById('intro-screen').style.display = 'none';
+        this.showMainMenu();
+        
+        // Hide load btn if no save
+        const saveExists = window.safeLocalStorage.getItem('shadowProtocolSave');
+        const loadBtn = document.getElementById('btn-load-game');
+        if (loadBtn && !saveExists) {
+            loadBtn.disabled = true;
+            loadBtn.style.color = '#555';
+            loadBtn.style.borderColor = '#555';
+        }
+    },
+
     triggerCyberGlitchTransition: function(text, callback) {
         try {
             const overlay = document.getElementById('cyber-glitch-overlay');
@@ -3842,7 +3893,7 @@ const appState = {
                 if (container) container.innerHTML = "";
             } catch (err) {}
 
-            const saveExists = localStorage.getItem('shadowProtocolSave');
+            const saveExists = window.safeLocalStorage.getItem('shadowProtocolSave');
             const loadBtn = document.getElementById('btn-load-game');
             if (saveExists) {
                 loadBtn.disabled = false;
@@ -4326,7 +4377,7 @@ const appState = {
         };
         
         // Save settings to LocalStorage so they are persisted across launches
-        localStorage.setItem('shadowProtocolSettings', JSON.stringify(window.globalSettings));
+        window.safeLocalStorage.setItem('shadowProtocolSettings', JSON.stringify(window.globalSettings));
         
         // Synchronize with active native Android bridge if connected
         if (window.Android) {
@@ -4585,7 +4636,7 @@ const appState = {
             console.warn("Error stopping menu audio inside loadGame", e);
         }
 
-        const savedData = localStorage.getItem('shadowProtocolSave');
+        const savedData = window.safeLocalStorage.getItem('shadowProtocolSave');
         if (savedData) {
             document.getElementById('main-menu').style.display = 'none';
             document.getElementById('game-container').style.display = 'block';
@@ -4601,8 +4652,9 @@ const appState = {
 };
 
 window.onload = () => {
+    window.appState = appState;
     // Load persisted settings or fall back to high-fidelity defaults
-    const persisted = localStorage.getItem('shadowProtocolSettings');
+    const persisted = window.safeLocalStorage.getItem('shadowProtocolSettings');
     if (persisted) {
         try {
             window.globalSettings = JSON.parse(persisted);
@@ -4627,24 +4679,9 @@ window.onload = () => {
         }
     }
     
-    appState.showMainMenu();
-    
-    // Web Audio User-Gesture Unlock System (Ensures audio starts on first click or touch)
-    const initGlobalAudio = () => {
-        try {
-            // Only start if not already in game
-            if (!window.game) {
-                window.menuAudioManager = window.menuAudioManager || new AudioManager();
-                window.menuAudioManager.init();
-            }
-        } catch (e) {
-            console.error("Failed to unlock and start main menu ambient audio", e);
-        }
-        window.removeEventListener('pointerdown', initGlobalAudio);
-        window.removeEventListener('click', initGlobalAudio);
-    };
-    window.addEventListener('pointerdown', initGlobalAudio);
-    window.addEventListener('click', initGlobalAudio);
+    // Show intro screen first
+    document.getElementById('intro-screen').style.display = 'flex';
+    document.getElementById('main-menu').style.display = 'none';
     
     // UI Parallax Effect
     window.addEventListener('mousemove', (e) => {

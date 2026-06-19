@@ -2,8 +2,32 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Shadow Protocol: Red Cell - Tactical</title>
+    
+    <script>
+        function displayError(htmlStr) {
+            function show() {
+                var errDisplay = document.getElementById('global-error-display');
+                if (!errDisplay) {
+                    errDisplay = document.createElement('div');
+                    errDisplay.id = 'global-error-display';
+                    errDisplay.style.cssText = 'position:fixed; top:0; left:0; width:100%; max-height:50%; overflow:auto; background:rgba(255,0,0,0.85); color:white; font-family:monospace; font-size:12px; z-index:99999; padding:10px; pointer-events:auto; word-break:break-all;';
+                    if (document.body) document.body.appendChild(errDisplay);
+                }
+                if (errDisplay) errDisplay.innerHTML += htmlStr;
+            }
+            if (document.body) show();
+            else window.addEventListener('DOMContentLoaded', show);
+        }
+        window.onerror = function(msg, url, line, col, error) {
+            displayError('<hr><b>ERR:</b> ' + msg + '<br><b>Line:</b> ' + line + ':' + col);
+            return false;
+        };
+        window.addEventListener('unhandledrejection', function(event) {
+            displayError('<hr><b>REJECTION:</b> ' + (event.reason ? event.reason.stack || event.reason : "Unknown"));
+        });
+    </script>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #000; font-family: 'Courier New', Courier, monospace; color: #0f0; }
         #game-container { width: 100%; height: 100%; position: relative; touch-action: none; display: none; }
@@ -530,6 +554,24 @@
     </div>
 
 <script>
+window.safeLocalStorage = {
+    getItem: function(key) {
+        try {
+            return localStorage.getItem(key);
+        } catch(e) {
+            console.warn("localStorage.getItem failed", e);
+            return null;
+        }
+    },
+    setItem: function(key, value) {
+        try {
+            localStorage.setItem(key, value);
+        } catch(e) {
+            console.warn("localStorage.setItem failed", e);
+        }
+    }
+};
+
 const WEAPONS = {
     'MP-10 SD': { damage: 35, pen: 15, acc: 85, silenced: true, suppression: 5 },
     'MG-60': { damage: 50, pen: 25, acc: 70, silenced: false, suppression: 40 },
@@ -752,7 +794,13 @@ class Game {
         this.camera.position.set(150, 200, 150);
         this.camera.lookAt((GRID_W * TILE_SIZE) / 2, 0, (GRID_H * TILE_SIZE) / 2);
 
-        this.renderer = new THREE.WebGLRenderer({ antialias: true });
+        try {
+            this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        } catch(e) {
+            console.error("WebGL Init Err", e);
+            document.body.innerHTML = "<div style='color:red; background:black; padding:20px; text-align:center; height:100vh; display:flex; flex-direction:column; justify-content:center;'><h1>FATAL ERROR: WebGL failed to initialize</h1><p>" + e.message + "</p></div>";
+            return;
+        }
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.renderer.setClearColor(0x020304); // Darker, cinematic background
         this.renderer.shadowMap.enabled = true;
@@ -2067,7 +2115,7 @@ class Game {
                 alert: e.alert, sightRadius: e.sightRadius, hearingRadius: e.hearingRadius, lastKnownTarget: e.lastKnownTarget
             }))
         };
-        localStorage.setItem('shadowProtocolSave', JSON.stringify(state));
+        window.safeLocalStorage.setItem('shadowProtocolSave', JSON.stringify(state));
         logMessage(`[СИСТЕМА] Прогресс сохранен.`, 'log-turn');
     }
 
@@ -4304,7 +4352,7 @@ const appState = {
         this.showMainMenu();
         
         // Hide load btn if no save
-        const saveExists = localStorage.getItem('shadowProtocolSave');
+        const saveExists = window.safeLocalStorage.getItem('shadowProtocolSave');
         const loadBtn = document.getElementById('btn-load-game');
         if (loadBtn && !saveExists) {
             loadBtn.disabled = true;
@@ -4400,7 +4448,7 @@ const appState = {
                 if (container) container.innerHTML = "";
             } catch (err) {}
 
-            const saveExists = localStorage.getItem('shadowProtocolSave');
+            const saveExists = window.safeLocalStorage.getItem('shadowProtocolSave');
             const loadBtn = document.getElementById('btn-load-game');
             if (saveExists) {
                 loadBtn.disabled = false;
@@ -4884,7 +4932,7 @@ const appState = {
         };
         
         // Save settings to LocalStorage so they are persisted across launches
-        localStorage.setItem('shadowProtocolSettings', JSON.stringify(window.globalSettings));
+        window.safeLocalStorage.setItem('shadowProtocolSettings', JSON.stringify(window.globalSettings));
         
         // Synchronize with active native Android bridge if connected
         if (window.Android) {
@@ -5143,7 +5191,7 @@ const appState = {
             console.warn("Error stopping menu audio inside loadGame", e);
         }
 
-        const savedData = localStorage.getItem('shadowProtocolSave');
+        const savedData = window.safeLocalStorage.getItem('shadowProtocolSave');
         if (savedData) {
             document.getElementById('main-menu').style.display = 'none';
             document.getElementById('game-container').style.display = 'block';
@@ -5161,7 +5209,7 @@ const appState = {
 window.onload = () => {
     window.appState = appState;
     // Load persisted settings or fall back to high-fidelity defaults
-    const persisted = localStorage.getItem('shadowProtocolSettings');
+    const persisted = window.safeLocalStorage.getItem('shadowProtocolSettings');
     if (persisted) {
         try {
             window.globalSettings = JSON.parse(persisted);
