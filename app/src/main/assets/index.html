@@ -8,13 +8,57 @@
     <script>
         function displayError(htmlStr) {
             console.error(htmlStr);
+            let errDiv = document.getElementById('debug-error-banner');
+            if (!errDiv) {
+                errDiv = document.createElement('div');
+                errDiv.id = 'debug-error-banner';
+                errDiv.style.position = 'absolute';
+                errDiv.style.top = '10px';
+                errDiv.style.left = '10px';
+                errDiv.style.right = '10px';
+                errDiv.style.background = 'rgba(255, 0, 0, 0.95)';
+                errDiv.style.color = '#fff';
+                errDiv.style.padding = '15px';
+                errDiv.style.borderRadius = '5px';
+                errDiv.style.zIndex = '99999';
+                errDiv.style.fontFamily = 'monospace';
+                errDiv.style.fontSize = '12px';
+                errDiv.style.overflowY = 'auto';
+                errDiv.style.maxHeight = '80%';
+                errDiv.style.border = '2px solid #fff';
+                errDiv.style.boxShadow = '0 0 20px #000';
+                errDiv.innerHTML = '<b style="font-size:14px;color:#ff0;">⚠️ RUNTIME ERROR CAUGHT:</b>';
+                
+                // Add a Close button
+                const btn = document.createElement('button');
+                btn.innerText = 'DISMISS';
+                btn.style.float = 'right';
+                btn.style.background = '#fff';
+                btn.style.color = '#000';
+                btn.style.fontWeight = 'bold';
+                btn.style.border = 'none';
+                btn.style.padding = '3px 8px';
+                btn.style.borderRadius = '3px';
+                btn.onclick = () => errDiv.remove();
+                errDiv.appendChild(btn);
+                
+                const container = document.createElement('div');
+                container.id = 'debug-err-content';
+                errDiv.appendChild(container);
+                
+                document.body.appendChild(errDiv);
+            }
+            const container = document.getElementById('debug-err-content');
+            if (container) {
+                container.innerHTML += '<div style="margin-top: 5px;">' + htmlStr + '</div>';
+            }
         }
         window.onerror = function(msg, url, line, col, error) {
-            displayError('<hr><b>ERR:</b> ' + msg + '<br><b>Line:</b> ' + line + ':' + col);
+            displayError('<hr><b>ERR:</b> ' + msg + '<br><b>Line:</b> ' + line + ':' + col + (error && error.stack ? '<br><b>Stack:</b><pre style="white-space:pre-wrap;font-size:10px;">' + error.stack + '</pre>' : ''));
             return false;
         };
         window.addEventListener('unhandledrejection', function(event) {
-            displayError('<hr><b>REJECTION:</b> ' + (event.reason ? event.reason.stack || event.reason : "Unknown"));
+            displayError('<hr><b>REJECTION:</b> ' + (event.reason ? (event.reason.stack || event.reason) : "Unknown"));
         });
         function safeSetStyle(id, property, value) {
             const el = document.getElementById(id);
@@ -52,17 +96,17 @@
             box-shadow: 0 0 25px rgba(0, 255, 170, 0.45) !important;
         }
         
-        #game-container { width: 100%; height: 100%; position: relative; touch-action: none; display: none; }
+        #game-container { width: 100vw; height: 100vh; position: absolute; top:0; left:0; touch-action: none; display: none; overflow: hidden; z-index: 1; }
         canvas { display: block; width: 100%; height: 100%; touch-action: none;}
         
-        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1000; transform: translateZ(0); display: block; }
         
-        .panel { background: rgba(0, 20, 0, 0.85); border: 1px solid #0f0; padding: 10px; position: absolute; pointer-events: auto; }
+        .panel { background: rgba(0, 20, 0, 0.85); border: 1px solid #0f0; padding: 10px; position: absolute; pointer-events: auto; z-index: 1001; box-shadow: 0 0 10px rgba(0,255,0,0.5); border-radius: 4px; transform: translateZ(0); }
         
-        #top-bar { top: 10px; left: 50%; transform: translateX(-50%); text-align: center; border-radius: 5px; box-shadow: 0 0 10px rgba(0, 255, 0, 0.5); }
+        #top-bar { top: 10px; top: env(safe-area-inset-top, 10px); left: 50%; transform: translateX(-50%); text-align: center; border-radius: 5px; box-shadow: 0 0 10px rgba(0, 255, 0, 0.5); z-index: 1002; margin-top: 10px; }
         #turn-indicator { font-size: 20px; font-weight: bold; margin-bottom: 5px; letter-spacing: 2px;}
         
-        #bottom-bar { bottom: 10px; left: 50%; transform: translateX(-50%); display: flex; gap: 20px; align-items: center; border-radius: 5px; box-shadow: 0 0 10px rgba(0, 255, 0, 0.5); }
+        #bottom-bar { bottom: 10px; bottom: env(safe-area-inset-bottom, 10px); left: 50%; transform: translateX(-50%); display: flex; gap: 20px; align-items: center; border-radius: 5px; box-shadow: 0 0 10px rgba(0, 255, 0, 0.5); z-index: 1002; margin-bottom: 10px; flex-wrap: wrap; justify-content: center; width: 90%; }
         
         .btn { background: #050; color: #0f0; border: 1px solid #0f0; padding: 10px 20px; font-weight: bold; cursor: pointer; text-transform: uppercase; font-family: inherit;}
         .btn:hover { background: #0a0; color: #000; box-shadow: 0 0 10px #0f0;}
@@ -78,8 +122,8 @@
         .log-turn { color: #ff0; font-weight: bold; }
         .log-combat { color: #f55; font-weight: bold;}
         .log-move { color: #aaa; }
-        #tooltip { position: absolute; background: rgba(0, 20, 0, 0.9); border: 1px solid #0f0; color: #0f0; padding: 5px 10px; font-weight: bold; pointer-events: none; display: none; z-index: 100; font-size: 14px; text-transform: uppercase; box-shadow: 0 0 10px #0f0;}
-        #context-menu { position: absolute; background: rgba(0, 40, 0, 0.95); border: 1px solid #0f0; color: #0f0; display: none; z-index: 200; flex-direction: column; gap: 5px; padding: 10px; box-shadow: 0 0 10px #0f0; border-radius: 4px; pointer-events: auto;}
+        #tooltip { position: absolute; background: rgba(0, 20, 0, 0.9); border: 1px solid #0f0; color: #0f0; padding: 5px 10px; font-weight: bold; pointer-events: none; display: none; z-index: 1005; font-size: 14px; text-transform: uppercase; box-shadow: 0 0 10px #0f0;}
+        #context-menu { position: absolute; background: rgba(0, 40, 0, 0.95); border: 1px solid #0f0; color: #0f0; display: none; z-index: 1006; flex-direction: column; gap: 5px; padding: 10px; box-shadow: 0 0 10px #0f0; border-radius: 4px; pointer-events: auto;}
 
         /* Main Menu & Briefing */
         .overlay-screen { 
@@ -289,6 +333,69 @@
             0% { transform: scale(1); filter: brightness(1); }
             50% { transform: scale(1.05); filter: brightness(2); box-shadow: 0 0 30px #ffcc00; }
             100% { transform: scale(1); filter: brightness(1); }
+        }
+        
+        /* Highly Optimized Mobile Portrait layout to prevent HUD overlapping */
+        @media (max-width: 768px) {
+            #selected-info {
+                position: absolute !important;
+                bottom: 120px !important; /* Above the bottom bar */
+                left: 50% !important;
+                transform: translateX(-50%) !important;
+                width: 92% !important;
+                min-width: unset !important;
+                max-height: 110px !important;
+                overflow-y: auto !important;
+                font-size: 11px !important;
+                padding: 6px !important;
+            }
+            #selected-info img {
+                display: none !important; /* hide portrait to save space on mobile phones */
+            }
+            #selected-info #ekg-container {
+                display: none !important; /* hide repeating heartbeat to save vertical height */
+            }
+            #log-panel {
+                position: absolute !important;
+                top: 105px !important; /* Below top bar and margins */
+                left: 50% !important;
+                transform: translateX(-50%) !important;
+                width: 92% !important;
+                height: 70px !important;
+                font-size: 11px !important;
+                pointer-events: none !important; /* allow clicking through to map */
+                opacity: 0.8 !important;
+            }
+            #bottom-bar {
+                width: 96% !important;
+                gap: 4px !important;
+                padding: 4px !important;
+                margin-bottom: 5px !important;
+                bottom: 5px !important;
+            }
+            #bottom-bar .btn {
+                padding: 6px 10px !important;
+                font-size: 10px !important;
+                flex: 1 1 30% !important; /* grid column wrapping style */
+                text-align: center !important;
+            }
+            #visor-panel {
+                top: auto !important;
+                bottom: 245px !important; /* Directly above selected-info */
+                left: 50% !important;
+                transform: translateX(-50%) !important;
+                width: 92% !important;
+                flex-direction: row !important;
+                justify-content: space-around !important;
+                gap: 5px !important;
+                padding: 5px !important;
+            }
+            #visor-panel .btn {
+                padding: 4px 8px !important;
+                font-size: 9px !important;
+                flex: 1 !important;
+                text-align: center !important;
+            }
         }
     </style>
     <script src="three.min.js"></script>
@@ -524,7 +631,7 @@
 
     <div id="game-container">
         <!-- CRT scanline overlay -->
-        <div id="crt-overlay" style="position: absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index: 25; background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.15) 50%); background-size: 100% 4px; opacity: 0.7; mix-blend-mode: overlay;"></div>
+        <div id="crt-overlay" style="position: absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index: 25; background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%); background-size: 100% 4px; opacity: 0.25; mix-blend-mode: overlay;"></div>
         <!-- Adaptive weather atmosphere layer -->
         <canvas id="weather-overlay-canvas" style="position: absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index: 10;"></canvas>
         <div id="ui-layer">
@@ -839,9 +946,15 @@ class Game {
         // Устанавливаем изометрический вид (камера под углом к сетке)
         this.camera.position.set(150, 200, 150);
         this.camera.lookAt((GRID_W * TILE_SIZE) / 2, 0, (GRID_H * TILE_SIZE) / 2);
+        this.camera.zoom = 1.35;
+        this.camera.updateProjectionMatrix();
 
         try {
             this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            this.renderer.domElement.style.position = 'absolute';
+            this.renderer.domElement.style.top = '0px';
+            this.renderer.domElement.style.left = '0px';
+            this.renderer.domElement.style.zIndex = '0';
         } catch(e) {
             console.error("WebGL Init Err", e);
             document.body.innerHTML = "<div style='color:red; background:black; padding:20px; text-align:center; height:100vh; display:flex; flex-direction:column; justify-content:center;'><h1>FATAL ERROR: WebGL failed to initialize</h1><p>" + e.message + "</p></div>";
@@ -856,7 +969,28 @@ class Game {
         this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
         this.renderer.toneMappingExposure = 0.85; // Gritty, dark look
         
-        document.getElementById('game-container').appendChild(this.renderer.domElement);
+        const container = document.getElementById('game-container');
+        
+        let webglWrap = document.getElementById('webgl-wrapper');
+        if (!webglWrap) {
+            webglWrap = document.createElement('div');
+            webglWrap.id = 'webgl-wrapper';
+            webglWrap.style.position = 'absolute';
+            webglWrap.style.top = '0px';
+            webglWrap.style.left = '0px';
+            webglWrap.style.width = '100%';
+            webglWrap.style.height = '100%';
+            webglWrap.style.zIndex = '0';
+            webglWrap.style.pointerEvents = 'auto'; // allow touch
+            container.insertBefore(webglWrap, container.firstChild);
+        } else {
+            webglWrap.innerHTML = '';
+        }
+        
+        this.renderer.domElement.style.position = 'absolute';
+        this.renderer.domElement.style.top = '0';
+        this.renderer.domElement.style.left = '0';
+        webglWrap.appendChild(this.renderer.domElement);
 
         this.grid = [];
         this.entities = [];
@@ -1090,7 +1224,7 @@ class Game {
             logMessage("[КЛИМАТ-КОНТРОЛЬ] Локация: Восточная Европа. Обнаружены плотные осадки/дождь.", "log-combat");
         } else if (currentIdx === 1) {
             this.weatherManager.setMode('sandstorm');
-            logMessage("[КЛИМАТ-КОНТРОЛЬ] Локация: Ближний Восток. Внимание: активная песчаная буря.", "log-combat");
+            logMessage("[КЛИМАТ-КОНТРОЛЬ] Локация: Ближний Восток. Внимание: active sandstorm.", "log-combat");
         } else if (currentIdx === 2) {
             this.weatherManager.setMode('digital');
             logMessage("[КЛИМАТ-КОНТРОЛЬ] Локация: Нео-Шанхай. Системные помехи, сканирование сети.", "log-combat");
@@ -1099,136 +1233,262 @@ class Game {
         }
     }
 
+    generateNormalMap(heightCanvas, strength = 1.0) {
+        const width = heightCanvas.width;
+        const height = heightCanvas.height;
+        const ctxH = heightCanvas.getContext('2d');
+        const imgData = ctxH.getImageData(0, 0, width, height);
+        const data = imgData.data;
+
+        const canvasN = document.createElement('canvas');
+        canvasN.width = width;
+        canvasN.height = height;
+        const ctxN = canvasN.getContext('2d');
+        const imgDataN = ctxN.createImageData(width, height);
+        const dataN = imgDataN.data;
+
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                const getVal = (px, py) => {
+                    const tx = (px + width) % width;
+                    const ty = (py + height) % height;
+                    return data[(ty * width + tx) * 4] / 255.0; // Read Red channel
+                };
+
+                const v00 = getVal(x - 1, y - 1);
+                const v01 = getVal(x,     y - 1);
+                const v02 = getVal(x + 1, y - 1);
+                const v10 = getVal(x - 1, y);
+                const v12 = getVal(x + 1, y);
+                const v20 = getVal(x - 1, y + 1);
+                const v21 = getVal(x,     y + 1);
+                const v22 = getVal(x + 1, y + 1);
+
+                const dX = (v02 + 2.0 * v12 + v22) - (v00 + 2.0 * v10 + v20);
+                const dY = (v20 + 2.0 * v21 + v22) - (v00 + 2.0 * v01 + v02);
+                const dZ = 1.0 / (strength || 1.0);
+
+                const len = Math.sqrt(dX * dX + dY * dY + dZ * dZ);
+                const nx = -dX / len;
+                const ny = -dY / len;
+                const nz = dZ / len;
+
+                const i = (y * width + x) * 4;
+                dataN[i]     = Math.floor((nx * 0.5 + 0.5) * 255);
+                dataN[i + 1] = Math.floor((ny * 0.5 + 0.5) * 255);
+                dataN[i + 2] = Math.floor((nz * 0.5 + 0.5) * 255);
+                dataN[i + 3] = 255;
+            }
+        }
+        ctxN.putImageData(imgDataN, 0, 0);
+        return canvasN;
+    }
+
     createMissionFloorTextures(currentIdx) {
         if (currentIdx === 0) { // Port - Wet concrete pavement with reflective puddles
             const canvasD = document.createElement('canvas'); canvasD.width = 128; canvasD.height = 128;
             const ctxD = canvasD.getContext('2d');
-            ctxD.fillStyle = '#1c1f22'; ctxD.fillRect(0, 0, 128, 128);
-            for (let i = 0; i < 500; i++) {
-                const grey = Math.floor(Math.random() * 15) + 15;
-                ctxD.fillStyle = `rgb(${grey}, ${grey + 2}, ${grey + 5})`;
-                ctxD.fillRect(Math.random() * 128, Math.random() * 128, 1, 1);
-            }
-            ctxD.strokeStyle = 'rgba(0, 0, 0, 0.4)'; ctxD.lineWidth = 1;
-            for (let i = 0; i < 2; i++) {
-                ctxD.beginPath(); let cx = Math.random() * 128, cy = Math.random() * 128; ctxD.moveTo(cx, cy);
-                for (let j = 0; j < 4; j++) { cx += (Math.random() - 0.5) * 20; cy += (Math.random() - 0.5) * 20; ctxD.lineTo(cx, cy); }
-                ctxD.stroke();
-            }
-            const puddles = []; ctxD.fillStyle = '#08090a';
-            for (let p = 0; p < 3; p++) {
-                const px = Math.random() * 90 + 19; const py = Math.random() * 90 + 19; const pr = Math.random() * 15 + 8;
-                puddles.push({ x: px, y: py, r: pr });
-                ctxD.beginPath(); ctxD.arc(px, py, pr, 0, Math.PI * 2); ctxD.fill();
-            }
-
+            const canvasH = document.createElement('canvas'); canvasH.width = 128; canvasH.height = 128;
+            const ctxH = canvasH.getContext('2d');
             const canvasR = document.createElement('canvas'); canvasR.width = 128; canvasR.height = 128;
             const ctxR = canvasR.getContext('2d');
-            ctxR.fillStyle = '#d0d0d0'; ctxR.fillRect(0, 0, 128, 128); // dry concrete is rough (0.8)
-            puddles.forEach(p => {
-                ctxR.fillStyle = '#101010'; ctxR.beginPath(); ctxR.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctxR.fill();
-            });
-
             const canvasM = document.createElement('canvas'); canvasM.width = 128; canvasM.height = 128;
             const ctxM = canvasM.getContext('2d');
-            ctxM.fillStyle = '#0a0a0a'; ctxM.fillRect(0, 0, 128, 128); // non-metallic base
+
+            // 1. Heightmap - Base height neutral gray
+            ctxH.fillStyle = '#a0a0a0'; ctxH.fillRect(0, 0, 128, 128);
+            // Height cracks and joint lines
+            ctxH.strokeStyle = '#303030'; ctxH.lineWidth = 2.0;
+            ctxH.beginPath(); ctxH.moveTo(64, 0); ctxH.lineTo(64, 128); ctxH.moveTo(0, 64); ctxH.lineTo(128, 64); ctxH.stroke();
+            // Cracks
+            ctxH.lineWidth = 1; ctxH.strokeStyle = '#101010';
+            for (let i = 0; i < 3; i++) {
+                ctxH.beginPath(); let cx = Math.random() * 128, cy = Math.random() * 128; ctxH.moveTo(cx, cy);
+                for (let j = 0; j < 5; j++) { cx += (Math.random() - 0.5) * 25; cy += (Math.random() - 0.5) * 25; ctxH.lineTo(cx, cy); }
+                ctxH.stroke();
+            }
+            // Fine concrete noise
+            for (let i = 0; i < 1500; i++) {
+                const shade = Math.floor(Math.random() * 30) - 15;
+                ctxH.fillStyle = `rgb(${160 + shade}, ${160 + shade}, ${160 + shade})`;
+                ctxH.fillRect(Math.random() * 128, Math.random() * 128, 1, 1);
+            }
+
+            // 2. Diffuse/Base color
+            ctxD.fillStyle = '#1e2226'; ctxD.fillRect(0, 0, 128, 128); // Concrete gray
+            // Concrete aggregates
+            for (let i = 0; i < 800; i++) {
+                const gr = Math.floor(Math.random() * 20) + 12;
+                ctxD.fillStyle = `rgb(${gr}, ${gr + 3}, ${gr + 6})`; // cool base grain
+                ctxD.fillRect(Math.random() * 128, Math.random() * 128, 1, 1);
+            }
+            // Joint lines on diffuse
+            ctxD.strokeStyle = 'rgba(10, 12, 15, 0.6)'; ctxD.lineWidth = 2.0;
+            ctxD.beginPath(); ctxD.moveTo(64, 0); ctxD.lineTo(64, 128); ctxD.moveTo(0, 64); ctxD.lineTo(128, 64); ctxD.stroke();
+
+            // 3. Puddles setup (Diffuse, Roughness, Metalness, Height)
+            ctxR.fillStyle = '#cbcbcb'; ctxR.fillRect(0, 0, 128, 128); // Rough dry concrete
+            ctxM.fillStyle = '#020202'; ctxM.fillRect(0, 0, 128, 128); // Non-metallic pavement
+            const puddles = [
+                { x: 32, y: 32, r: 24 },
+                { x: 96, y: 80, r: 18 },
+                { x: 80, y: 22, r: 14 }
+            ];
             puddles.forEach(p => {
-                ctxM.fillStyle = '#a0a0a0'; ctxM.beginPath(); ctxM.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctxM.fill(); // shiny reflections
+                // Smooth transition radial puddles
+                const dGrad = ctxD.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r);
+                dGrad.addColorStop(0, '#0a0d11'); // Clear dark water core
+                dGrad.addColorStop(0.7, '#101317');
+                dGrad.addColorStop(1.0, '#1e2226'); // Edge blend
+                ctxD.fillStyle = dGrad;
+                ctxD.beginPath(); ctxD.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctxD.fill();
+
+                // Wet puddle roughness (Extremely smooth)
+                const rGrad = ctxR.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r);
+                rGrad.addColorStop(0, '#080808'); // High gloss (0.03)
+                rGrad.addColorStop(0.8, '#101010');
+                rGrad.addColorStop(1.0, '#cbcbcb'); // Blend back to rough concrete
+                ctxR.fillStyle = rGrad;
+                ctxR.beginPath(); ctxR.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctxR.fill();
+
+                // Puddle metalness (reflective multiplier)
+                const mGrad = ctxM.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r);
+                mGrad.addColorStop(0, '#dadada'); // Shiny reflection specular
+                mGrad.addColorStop(0.8, '#b5b5b5');
+                mGrad.addColorStop(1.0, '#020202');
+                ctxM.fillStyle = mGrad;
+                ctxM.beginPath(); ctxM.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctxM.fill();
+
+                // Puddle depression in heightmap
+                const hGrad = ctxH.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r);
+                hGrad.addColorStop(0, '#505050'); // Flatten puddle bottom
+                hGrad.addColorStop(0.8, '#707070');
+                hGrad.addColorStop(1.0, '#a0a0a0');
+                ctxH.fillStyle = hGrad;
+                ctxH.beginPath(); ctxH.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctxH.fill();
             });
 
-            const canvasN = document.createElement('canvas'); canvasN.width = 128; canvasN.height = 128;
-            const ctxN = canvasN.getContext('2d');
-            ctxN.fillStyle = '#8080ff'; ctxN.fillRect(0, 0, 128, 128);
-            for (let i = 0; i < 500; i++) {
-                const nx = 128 + Math.floor((Math.random() - 0.5) * 20);
-                const ny = 128 + Math.floor((Math.random() - 0.5) * 20);
-                ctxN.fillStyle = `rgb(${nx}, ${ny}, 255)`; ctxN.fillRect(Math.random() * 128, Math.random() * 128, 1, 1);
-            }
-            ctxN.strokeStyle = 'rgba(100, 100, 255, 0.4)'; ctxN.lineWidth = 2;
-            puddles.forEach(p => {
-                ctxN.beginPath(); ctxN.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctxN.stroke();
-            });
+            const normalCanvas = this.generateNormalMap(canvasH, 0.85);
 
             return {
                 map: this.configureTex(new THREE.CanvasTexture(canvasD)),
                 roughnessMap: this.configureTex(new THREE.CanvasTexture(canvasR)),
                 metalnessMap: this.configureTex(new THREE.CanvasTexture(canvasM)),
-                normalMap: this.configureTex(new THREE.CanvasTexture(canvasN))
+                normalMap: this.configureTex(new THREE.CanvasTexture(normalCanvas))
             };
         } else if (currentIdx === 1) { // Desert - Sandy stone tiles
             const canvasD = document.createElement('canvas'); canvasD.width = 128; canvasD.height = 128;
             const ctxD = canvasD.getContext('2d');
-            ctxD.fillStyle = '#c5a072'; ctxD.fillRect(0, 0, 128, 128);
-            ctxD.strokeStyle = '#856a48'; ctxD.lineWidth = 2;
+            const canvasH = document.createElement('canvas'); canvasH.width = 128; canvasH.height = 128;
+            const ctxH = canvasH.getContext('2d');
+            const canvasR = document.createElement('canvas'); canvasR.width = 32; canvasR.height = 32;
+            const ctxR = canvasR.getContext('2d');
+            const canvasM = document.createElement('canvas'); canvasM.width = 16; canvasM.height = 16;
+            const ctxM = canvasM.getContext('2d');
+
+            // Heightmap
+            ctxH.fillStyle = '#c0c0c0'; ctxH.fillRect(0, 0, 128, 128);
+            ctxH.strokeStyle = '#202020'; ctxH.lineWidth = 3.0;
+            // Stone tiling cuts
+            for (let coord = 0; coord <= 128; coord += 32) {
+                ctxH.beginPath(); ctxH.moveTo(coord, 0); ctxH.lineTo(coord, 128); ctxH.stroke();
+                ctxH.beginPath(); ctxH.moveTo(0, coord); ctxH.lineTo(128, coord); ctxH.stroke();
+            }
+            // Fine sand grains on heightmap
+            for (let i = 0; i < 2000; i++) {
+                const hVal = Math.floor(Math.random() * 40) - 20;
+                ctxH.fillStyle = `rgb(${192 + hVal}, ${192 + hVal}, ${192 + hVal})`;
+                ctxH.fillRect(Math.random() * 128, Math.random() * 128, 1, 1);
+            }
+
+            // Diffuse Color - Sand stone tiles
+            ctxD.fillStyle = '#bfa580'; ctxD.fillRect(0, 0, 128, 128);
+            ctxD.strokeStyle = '#73604b'; ctxD.lineWidth = 2.5;
             for (let coord = 0; coord <= 128; coord += 32) {
                 ctxD.beginPath(); ctxD.moveTo(coord, 0); ctxD.lineTo(coord, 128); ctxD.stroke();
                 ctxD.beginPath(); ctxD.moveTo(0, coord); ctxD.lineTo(128, coord); ctxD.stroke();
             }
-            for (let i = 0; i < 600; i++) {
-                const shade = Math.floor(Math.random() * 20) - 10;
-                ctxD.fillStyle = `rgba(${220+shade}, ${190+shade}, ${145+shade}, 0.25)`;
+            // Sand ripples & noise
+            for (let i = 0; i < 1000; i++) {
+                const shade = Math.floor(Math.random() * 16) - 8;
+                ctxD.fillStyle = `rgba(${225+shade}, ${195+shade}, ${150+shade}, 0.28)`;
                 ctxD.fillRect(Math.random() * 128, Math.random() * 128, 1.5, 1.5);
             }
 
-            const canvasR = document.createElement('canvas'); canvasR.width = 32; canvasR.height = 32;
-            const ctxR = canvasR.getContext('2d');
-            ctxR.fillStyle = '#f0f0f0'; ctxR.fillRect(0, 0, 32, 32); // super rough sand (0.94)
+            ctxR.fillStyle = '#ededed'; ctxR.fillRect(0, 0, 32, 32); // super rough dry sand (0.93)
+            ctxM.fillStyle = '#000000'; ctxM.fillRect(0, 0, 16, 16); // non-metallic
 
-            const canvasM = document.createElement('canvas'); canvasM.width = 16; canvasM.height = 16;
-            const ctxM = canvasM.getContext('2d');
-            ctxM.fillStyle = '#000000'; ctxM.fillRect(0, 0, 16, 16);
-
-            const canvasN = document.createElement('canvas'); canvasN.width = 128; canvasN.height = 128;
-            const ctxN = canvasN.getContext('2d');
-            ctxN.fillStyle = '#8080ff'; ctxN.fillRect(0, 0, 128, 128);
-            ctxN.strokeStyle = '#7070ff'; ctxN.lineWidth = 2;
-            for (let coord = 0; coord <= 128; coord += 32) {
-                ctxN.beginPath(); ctxN.moveTo(coord, 0); ctxN.lineTo(coord, 128); ctxN.stroke();
-                ctxN.beginPath(); ctxN.moveTo(0, coord); ctxN.lineTo(128, coord); ctxN.stroke();
-            }
+            const normalCanvas = this.generateNormalMap(canvasH, 1.3);
 
             return {
                 map: this.configureTex(new THREE.CanvasTexture(canvasD)),
                 roughnessMap: this.configureTex(new THREE.CanvasTexture(canvasR)),
                 metalnessMap: this.configureTex(new THREE.CanvasTexture(canvasM)),
-                normalMap: this.configureTex(new THREE.CanvasTexture(canvasN))
+                normalMap: this.configureTex(new THREE.CanvasTexture(normalCanvas))
             };
-        } else { // Shanghai - Cybercarbon grids with responsive looping scrolling lines
+        } else { // Shanghai - Cybercarbon grids with scrolling neon lines
             const canvasD = document.createElement('canvas'); canvasD.width = 128; canvasD.height = 128;
             const ctxD = canvasD.getContext('2d');
-            ctxD.fillStyle = '#05070a'; ctxD.fillRect(0, 0, 128, 128);
-            ctxD.fillStyle = '#080a0e';
+            const canvasH = document.createElement('canvas'); canvasH.width = 128; canvasH.height = 128;
+            const ctxH = canvasH.getContext('2d');
+            const canvasR = document.createElement('canvas'); canvasR.width = 32; canvasR.height = 32;
+            const ctxR = canvasR.getContext('2d');
+            const canvasM = document.createElement('canvas'); canvasM.width = 32; canvasM.height = 32;
+            const ctxM = canvasM.getContext('2d');
+            const canvasE = document.createElement('canvas'); canvasE.width = 128; canvasE.height = 128;
+            const ctxE = canvasE.getContext('2d');
+
+            // Heightmap - composite carbon grid + circuit indentations
+            ctxH.fillStyle = '#bcbcbc'; ctxH.fillRect(0, 0, 128, 128);
+            ctxH.strokeStyle = '#202020'; ctxH.lineWidth = 2.0;
+            ctxH.strokeRect(4, 4, 120, 120);
+            ctxH.beginPath(); ctxH.moveTo(16, 0); ctxH.lineTo(16, 64); ctxH.lineTo(64, 64); ctxH.lineTo(64, 128);
+            ctxH.moveTo(112, 0); ctxH.lineTo(112, 80); ctxH.lineTo(80, 80); ctxH.lineTo(80, 128); ctxH.stroke();
+
+            // Carbon micro weave on heightmap
+            for (let x = 0; x < 128; x += 4) {
+                for (let y = 0; y < 128; y += 4) {
+                    if ((x + y) % 8 === 0) {
+                        ctxH.fillStyle = '#606060'; ctxH.fillRect(x, y, 2, 2);
+                    }
+                }
+            }
+
+            // Diffuse Color - Technical metal plates / Carbon carbon fiber base
+            ctxD.fillStyle = '#060a12'; ctxD.fillRect(0, 0, 128, 128);
+            ctxD.fillStyle = '#09101c';
             for (let x = 0; x < 128; x += 4) {
                 for (let y = 0; y < 128; y += 4) { if ((x + y) % 8 === 0) ctxD.fillRect(x, y, 2, 2); }
             }
-            ctxD.strokeStyle = 'rgba(0, 240, 255, 0.3)'; ctxD.lineWidth = 1;
+            ctxD.strokeStyle = 'rgba(0, 240, 255, 0.4)'; ctxD.lineWidth = 1;
             ctxD.beginPath(); ctxD.moveTo(16, 0); ctxD.lineTo(16, 64); ctxD.lineTo(64, 64); ctxD.lineTo(64, 128);
             ctxD.moveTo(112, 0); ctxD.lineTo(112, 80); ctxD.lineTo(80, 80); ctxD.lineTo(80, 128); ctxD.stroke();
 
-            const canvasR = document.createElement('canvas'); canvasR.width = 32; canvasR.height = 32;
-            const ctxR = canvasR.getContext('2d');
-            ctxR.fillStyle = '#404040'; ctxR.fillRect(0, 0, 32, 32); // polished tech floor (0.25)
+            ctxR.fillStyle = '#2a2a2a'; ctxR.fillRect(0, 0, 32, 32); // highly polished carbon grid (0.16)
+            ctxM.fillStyle = '#e6e6e6'; ctxM.fillRect(0, 0, 32, 32); // cyber metallic plate (0.9)
 
-            const canvasM = document.createElement('canvas'); canvasM.width = 32; canvasM.height = 32;
-            const ctxM = canvasM.getContext('2d');
-            ctxM.fillStyle = '#b3b3b3'; ctxM.fillRect(0, 0, 32, 32); // highly metallic grid panels
-
-            const canvasE = document.createElement('canvas'); canvasE.width = 128; canvasE.height = 128;
-            const ctxE = canvasE.getContext('2d');
+            // Emissive circuit paths
             ctxE.fillStyle = '#000000'; ctxE.fillRect(0, 0, 128, 128);
-            ctxE.strokeStyle = 'rgba(0, 255, 200, 0.8)'; ctxE.lineWidth = 1.5;
+            ctxE.strokeStyle = 'rgba(0, 255, 200, 0.9)'; ctxE.lineWidth = 2.0;
             ctxE.beginPath(); ctxE.moveTo(16, 0); ctxE.lineTo(16, 64); ctxE.lineTo(64, 64); ctxE.lineTo(64, 128);
-            ctxE.stroke();
+            ctxE.moveTo(112, 0); ctxE.lineTo(112, 80); ctxE.lineTo(80, 80); ctxE.lineTo(80, 128); ctxE.stroke();
+            // Glowing node points
+            ctxE.fillStyle = '#00ffff';
+            ctxE.beginPath(); ctxE.arc(16, 32, 3.5, 0, Math.PI * 2); ctxE.arc(64, 64, 3.5, 0, Math.PI * 2); ctxE.arc(80, 100, 3.5, 0, Math.PI * 2); ctxE.fill();
 
-            const eMap = this.configureTex(new THREE.CanvasTexture(canvasE));
+            const normalCanvas = this.generateNormalMap(canvasH, 0.5);
+
+            const mapTex = this.configureTex(new THREE.CanvasTexture(canvasD));
+            const emissiveTex = this.configureTex(new THREE.CanvasTexture(canvasE));
+
             return {
-                map: this.configureTex(new THREE.CanvasTexture(canvasD)),
+                map: mapTex,
                 roughnessMap: this.configureTex(new THREE.CanvasTexture(canvasR)),
                 metalnessMap: this.configureTex(new THREE.CanvasTexture(canvasM)),
-                normalMap: this.configureTex(new THREE.CanvasTexture(canvasD)), // reusable normal detail bump
-                emissiveMap: eMap,
+                normalMap: this.configureTex(new THREE.CanvasTexture(normalCanvas)),
+                emissiveMap: emissiveTex,
                 emissive: 0x00ffcc,
-                emissiveIntensity: 0.35
+                emissiveIntensity: 0.5
             };
         }
     }
@@ -1236,68 +1496,102 @@ class Game {
     createMissionCoverTextures(currentIdx) {
         const canvasD = document.createElement('canvas'); canvasD.width = 128; canvasD.height = 128;
         const ctxD = canvasD.getContext('2d');
-        const canvasN = document.createElement('canvas'); canvasN.width = 128; canvasN.height = 128;
-        const ctxN = canvasN.getContext('2d'); ctxN.fillStyle = '#8080ff'; ctxN.fillRect(0, 0, 128, 128);
+        const canvasH = document.createElement('canvas'); canvasH.width = 128; canvasH.height = 128;
+        const ctxH = canvasH.getContext('2d');
         const canvasR = document.createElement('canvas'); canvasR.width = 128; canvasR.height = 128;
         const ctxR = canvasR.getContext('2d');
         
         let edgeColor = 'rgba(255, 255, 255, 0.4)';
         let dirtColor = 'rgba(10, 10, 10, 0.6)';
 
-        if (currentIdx === 0) { // Port - Industrial containers with technical details and rust
-            ctxD.fillStyle = '#3a443b'; ctxD.fillRect(0, 0, 128, 128); // drab green
-            ctxD.strokeStyle = '#222923'; ctxD.lineWidth = 4; ctxD.strokeRect(4, 4, 120, 120);
-            ctxD.lineWidth = 2; ctxD.strokeRect(16, 16, 96, 96);
+        if (currentIdx === 0) { // Port - Corrugated shipping industrial container with rust
+            ctxD.fillStyle = '#343f35'; ctxD.fillRect(0, 0, 128, 128); // Drab metal green
+            
+            // Draw corrugated structures onto the heightmap
+            ctxH.fillStyle = '#a0a0a0'; ctxH.fillRect(0, 0, 128, 128);
+            ctxH.fillStyle = '#606060'; // container corrugation recesses
+            for (let x = 8; x < 128; x += 16) {
+                ctxH.fillRect(x, 0, 6, 128);
+            }
+            
+            // Draw shipping container design
+            ctxD.strokeStyle = '#1d231e'; ctxD.lineWidth = 4; ctxD.strokeRect(4, 4, 120, 120);
+            ctxD.lineWidth = 2; ctxD.strokeRect(10, 10, 108, 108);
             ctxD.fillStyle = '#1d231e';
             const rivets = [{x:8,y:8},{x:64,y:8},{x:120,y:8},{x:120,y:64},{x:120,y:120},{x:64,y:120},{x:8,y:120},{x:8,y:64}];
             rivets.forEach(r => {
                 ctxD.beginPath(); ctxD.arc(r.x, r.y, 2.5, 0, Math.PI * 2); ctxD.fill();
-                ctxN.fillStyle = '#a0a0ff'; ctxN.beginPath(); ctxN.arc(r.x, r.y, 2.5, 0, Math.PI * 2); ctxN.fill();
             });
-            ctxD.fillStyle = '#9aa59d'; ctxD.font = 'bold 8px monospace'; ctxD.fillText("MIL-SEC // COV", 20, 30);
-            ctxD.fillRect(20, 35, 30, 8); ctxD.fillStyle = '#1d231e';
-            for (let b = 22; b < 48; b += 2) { if (Math.random() > 0.3) ctxD.fillRect(b, 36, 1.5, 6); }
-            for (let i = 0; i < 5; i++) {
-                ctxD.fillStyle = 'rgba(100, 60, 40, 0.45)'; // Rust stains
-                ctxD.fillRect(Math.random() * 128, Math.random() * 128, Math.random() * 15 + 5, Math.random() * 8 + 2);
+            ctxD.fillStyle = '#9aa59d'; ctxD.font = 'bold 8.5px monospace'; ctxD.fillText("MIL-SEC // COV", 18, 25);
+            ctxD.fillRect(18, 30, 32, 6); ctxD.fillStyle = '#1d231e';
+            for (let b = 20; b < 48; b += 2) { if (Math.random() > 0.3) ctxD.fillRect(b, 31, 1.5, 4); }
+            
+            // Rust and grease stains (diffuse + height + roughness)
+            for (let i = 0; i < 6; i++) {
+                const rx = Math.random() * 90 + 10;
+                const ry = Math.random() * 90 + 10;
+                const rw = Math.random() * 18 + 6;
+                const rh = Math.random() * 10 + 4;
+                ctxD.fillStyle = 'rgba(120, 68, 30, 0.5)'; // Rust diffuse
+                ctxD.fillRect(rx, ry, rw, rh);
+                
+                ctxH.fillStyle = '#404040'; // Corroded indents in heightmap
+                ctxH.fillRect(rx, ry, rw, rh);
             }
-            ctxR.fillStyle = '#a0a0a0'; ctxR.fillRect(0, 0, 128, 128); // semi-rough steel
-            edgeColor = 'rgba(215, 225, 215, 0.55)'; // bare metal scratches
-            dirtColor = 'rgba(15, 20, 15, 0.8)';
-        } else if (currentIdx === 1) { // Desert - Pitted stucco blocks with fracture cracks
-            ctxD.fillStyle = '#d2b48c'; ctxD.fillRect(0, 0, 128, 128);
-            ctxD.strokeStyle = '#8b7355'; ctxD.lineWidth = 1;
-            ctxD.beginPath(); ctxD.moveTo(15, 0); ctxD.lineTo(25, 20); ctxD.lineTo(10, 40); ctxD.lineTo(22, 75); ctxD.lineTo(5, 110); ctxD.stroke();
-            ctxN.strokeStyle = '#5050ff'; ctxN.lineWidth = 1;
-            ctxN.beginPath(); ctxN.moveTo(15, 0); ctxN.lineTo(25, 20); ctxN.lineTo(10, 40); ctxN.lineTo(22, 75); ctxN.lineTo(5, 110); ctxN.stroke();
-            for (let i = 0; i < 30; i++) {
-                const px = Math.random() * 128, py = Math.random() * 128;
-                ctxD.fillStyle = 'rgba(0, 0, 0, 0.15)'; ctxD.fillRect(px, py, 1.5, 1.5);
-                ctxN.fillStyle = '#5050ff'; ctxN.fillRect(px, py, 1.5, 1.5);
+            
+            ctxR.fillStyle = '#929292'; ctxR.fillRect(0, 0, 128, 128); // semi-rough corrugated steel
+            edgeColor = 'rgba(215, 230, 215, 0.6)'; // scratched metal edges
+            dirtColor = 'rgba(15, 22, 16, 0.82)';
+        } else if (currentIdx === 1) { // Desert - Pitted stone blocks with fracture cracks
+            ctxD.fillStyle = '#dabc94'; ctxD.fillRect(0, 0, 128, 128);
+            
+            // Heightmap cracks
+            ctxH.fillStyle = '#f0f0f0'; ctxH.fillRect(0, 0, 128, 128);
+            ctxH.strokeStyle = '#101010'; ctxH.lineWidth = 1.8;
+            ctxH.beginPath(); ctxH.moveTo(15, 0); ctxH.lineTo(25, 20); ctxH.lineTo(10, 40); ctxH.lineTo(22, 75); ctxH.lineTo(5, 110); ctxH.stroke();
+            // Stucco noise
+            for (let i = 0; i < 2000; i++) {
+                const hVal = Math.floor(Math.random() * 50) - 25;
+                ctxH.fillStyle = `rgb(${200+hVal}, ${200+hVal}, ${200+hVal})`;
+                ctxH.fillRect(Math.random() * 128, Math.random() * 128, 1.2, 1.2);
             }
-            ctxR.fillStyle = '#dedede'; ctxR.fillRect(0, 0, 128, 128); // very dry, non-shiny plaster (0.87)
-            edgeColor = 'rgba(255, 245, 225, 0.6)'; // bright chipped plaster
-            dirtColor = 'rgba(80, 50, 20, 0.4)'; // sandy accumulation
 
-        } else { // Shanghai - Tech server grid with glowing indicator lights
-            ctxD.fillStyle = '#10141d'; ctxD.fillRect(0, 0, 128, 128);
-            ctxD.fillStyle = '#172030';
-            for (let y = 8; y < 120; y += 16) {
-                ctxD.fillRect(8, y, 112, 8);
-                ctxD.fillStyle = Math.random() > 0.5 ? '#ff3300' : '#00ffff'; ctxD.fillRect(12, y + 2.5, 3, 3);
-                ctxD.fillStyle = '#00ff66'; ctxD.fillRect(18, y + 2.5, 3, 3);
-                ctxD.fillStyle = '#172030';
+            // Draw identical cracks and pits in diffuse
+            ctxD.strokeStyle = '#856f54'; ctxD.lineWidth = 1.0;
+            ctxD.beginPath(); ctxD.moveTo(15, 0); ctxD.lineTo(25, 20); ctxD.lineTo(10, 40); ctxD.lineTo(22, 75); ctxD.lineTo(5, 110); ctxD.stroke();
+            for (let i = 0; i < 50; i++) {
+                const px = Math.random() * 128, py = Math.random() * 128;
+                ctxD.fillStyle = 'rgba(40, 30, 10, 0.28)'; ctxD.fillRect(px, py, 1.5, 1.5);
             }
-            ctxD.strokeStyle = 'rgba(0, 255, 255, 0.35)'; ctxD.lineWidth = 1; ctxD.strokeRect(4, 4, 120, 120);
-            ctxR.fillStyle = '#262626'; ctxR.fillRect(0, 0, 128, 128); // polished shiny servers (0.15)
-            edgeColor = 'rgba(0, 255, 255, 0.4)';
-            dirtColor = 'rgba(5, 5, 10, 0.7)';
+            ctxR.fillStyle = '#eaeaea'; ctxR.fillRect(0, 0, 128, 128); // super dry stucco
+            edgeColor = 'rgba(255, 248, 230, 0.65)';
+            dirtColor = 'rgba(85, 55, 25, 0.45)';
+        } else { // Shanghai - Tech server mainframe grid with glowing indicator lights
+            ctxD.fillStyle = '#0f121a'; ctxD.fillRect(0, 0, 128, 128); // carbon dark frame
+            
+            ctxH.fillStyle = '#dddddd'; ctxH.fillRect(0, 0, 128, 128);
+            ctxH.strokeStyle = '#101010'; ctxH.lineWidth = 2.5;
+            ctxH.strokeRect(4, 4, 120, 120);
+            
+            ctxD.fillStyle = '#161e2b';
+            for (let y = 10; y < 118; y += 16) {
+                // Mainframe server rack slot vents in heightmap & diffuse
+                ctxH.fillStyle = '#404040'; ctxH.fillRect(10, y, 108, 6);
+                ctxD.fillStyle = '#0a0d14'; ctxD.fillRect(10, y, 108, 6);
+                
+                // Indicators on diffuse
+                ctxD.fillStyle = Math.random() > 0.5 ? '#ff3200' : '#00ffff'; ctxD.fillRect(12, y + 1.5, 3.5, 3.5);
+                ctxD.fillStyle = '#01ff66'; ctxD.fillRect(20, y + 1.5, 3.5, 3.5);
+            }
+            ctxD.strokeStyle = 'rgba(0, 255, 255, 0.4)'; ctxD.lineWidth = 1.0; ctxD.strokeRect(4, 4, 120, 120);
+            ctxR.fillStyle = '#222222'; ctxR.fillRect(0, 0, 128, 128); // ultra shiny polished mainframe (0.13)
+            edgeColor = 'rgba(0, 255, 255, 0.45)';
+            dirtColor = 'rgba(6, 6, 12, 0.72)';
         }
 
         // Apply Edge Wear / Scratches
         ctxD.strokeStyle = edgeColor;
         ctxD.lineWidth = 1.5;
-        // Scratch lines around corners
         ctxD.beginPath();
         for (let i = 0; i < 20; i++) {
             if (Math.random() > 0.5) { ctxD.moveTo(Math.random() * 128, 1); ctxD.lineTo(Math.random() * 128, 4); }
@@ -1315,9 +1609,11 @@ class Game {
         ctxD.fillStyle = dGrad;
         ctxD.fillRect(0, 0, 128, 128);
 
+        const normalCanvas = this.generateNormalMap(canvasH, 0.95);
+
         return {
             map: this.configureTex(new THREE.CanvasTexture(canvasD)),
-            normalMap: this.configureTex(new THREE.CanvasTexture(canvasN)),
+            normalMap: this.configureTex(new THREE.CanvasTexture(normalCanvas)),
             roughnessMap: this.configureTex(new THREE.CanvasTexture(canvasR))
         };
     }
@@ -2808,50 +3104,53 @@ class Game {
     }
 
     updateMeshVisorMaterial(mesh, entity = null) {
-        const mat = mesh.material;
-        if (!mat) return;
-        
-        if (mat.baseColor === undefined) {
-            mat.baseColor = mat.color.clone();
-            mat.baseEmissive = mat.emissive ? mat.emissive.clone() : new THREE.Color(0x000000);
-            mat.baseEmissiveIntensity = mat.emissiveIntensity !== undefined ? mat.emissiveIntensity : 0;
-        }
-        
-        if (this.activeVisor === 'thermal') {
-            if (entity) {
-                if (entity.type === 'player' || entity.type === 'friendly') {
-                    mat.color.setHex(0x0088ff); // hot cyan Core
-                    mat.emissive.setHex(0x00ffff);
-                    mat.emissiveIntensity = 1.0;
-                } else if (entity.type === 'enemy') {
-                    mat.color.setHex(0xff3300); // red-hot hostile
-                    mat.emissive.setHex(0xffaa00);
-                    mat.emissiveIntensity = 1.2;
-                } else if (entity.type === 'barrel') {
-                    mat.color.setHex(0xffea00); // bright yellow chemicals
-                    mat.emissive.setHex(0xff9900);
-                    mat.emissiveIntensity = 1.0;
-                } else { // civilian/hostage
-                    mat.color.setHex(0x00ffaa); // organic green core
-                    mat.emissive.setHex(0x33ffaa);
-                    mat.emissiveIntensity = 0.6;
+        if (!mesh) return;
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        materials.forEach(mat => {
+            if (!mat) return;
+            
+            if (mat.baseColor === undefined) {
+                mat.baseColor = mat.color ? mat.color.clone() : new THREE.Color(0xffffff);
+                mat.baseEmissive = mat.emissive ? mat.emissive.clone() : new THREE.Color(0x000000);
+                mat.baseEmissiveIntensity = mat.emissiveIntensity !== undefined ? mat.emissiveIntensity : 0;
+            }
+            
+            if (this.activeVisor === 'thermal') {
+                if (entity) {
+                    if (entity.type === 'player' || entity.type === 'friendly') {
+                        if (mat.color) mat.color.setHex(0x0088ff); // hot cyan Core
+                        if (mat.emissive) mat.emissive.setHex(0x00ffff);
+                        if (mat.emissiveIntensity !== undefined) mat.emissiveIntensity = 1.0;
+                    } else if (entity.type === 'enemy') {
+                        if (mat.color) mat.color.setHex(0xff3300); // red-hot hostile
+                        if (mat.emissive) mat.emissive.setHex(0xffaa00);
+                        if (mat.emissiveIntensity !== undefined) mat.emissiveIntensity = 1.2;
+                    } else if (entity.type === 'barrel') {
+                        if (mat.color) mat.color.setHex(0xffea00); // bright yellow chemicals
+                        if (mat.emissive) mat.emissive.setHex(0xff9900);
+                        if (mat.emissiveIntensity !== undefined) mat.emissiveIntensity = 1.0;
+                    } else { // civilian/hostage
+                        if (mat.color) mat.color.setHex(0x00ffaa); // organic green core
+                        if (mat.emissive) mat.emissive.setHex(0x33ffaa);
+                        if (mat.emissiveIntensity !== undefined) mat.emissiveIntensity = 0.6;
+                    }
+                } else {
+                    if (mesh.parent === this.covers) {
+                        if (mat.color) mat.color.setHex(0x1a1250); // cold structures blue-purple
+                    } else {
+                        if (mat.color) mat.color.setHex(0x0a0525); // freezing floor dark-violet
+                    }
+                    if (mat.emissive) mat.emissive.setHex(0x020210);
+                    if (mat.emissiveIntensity !== undefined) mat.emissiveIntensity = 0.25;
                 }
             } else {
-                if (mesh.parent === this.covers) {
-                    mat.color.setHex(0x1a1250); // cold structures blue-purple
-                } else {
-                    mat.color.setHex(0x0a0525); // freezing floor dark-violet
+                if (mat.color && mat.baseColor) mat.color.copy(mat.baseColor);
+                if (mat.emissive && mat.baseEmissive) {
+                    mat.emissive.copy(mat.baseEmissive);
+                    mat.emissiveIntensity = mat.baseEmissiveIntensity;
                 }
-                mat.emissive.setHex(0x020210);
-                mat.emissiveIntensity = 0.25;
             }
-        } else {
-            mat.color.copy(mat.baseColor);
-            if (mat.emissive) {
-                mat.emissive.copy(mat.baseEmissive);
-                mat.emissiveIntensity = mat.baseEmissiveIntensity;
-            }
-        }
+        });
     }
 
     applyImpactRebound(entity, sourceX, sourceY, strength) {
@@ -2923,17 +3222,11 @@ class Game {
         // Gyro-Interactive 3D AR Parallax HUD
         document.addEventListener('mousemove', (e) => {
             if (!this.camera || !window.globalSettings || !window.globalSettings.vfxEnabled) return;
-            const x = (e.clientX / window.innerWidth) - 0.5;
-            const y = (e.clientY / window.innerHeight) - 0.5;
-            
-            // Subtle UI parallax
-            const uiLayer = document.getElementById('ui-layer');
-            if (uiLayer) {
-                uiLayer.style.transform = `translate(${x * -10}px, ${y * -10}px)`;
-            }
+            const x = (e.clientX !== undefined ? e.clientX / window.innerWidth - 0.5 : 0);
+            const y = (e.clientY !== undefined ? e.clientY / window.innerHeight - 0.5 : 0);
             
             // Subtle Camera rig offset
-            if (this.cameraRig) {
+            if (this.cameraRig && !isNaN(x) && !isNaN(y)) {
                 this.cameraRig.rotation.y = x * -0.05;
                 this.cameraRig.rotation.x = Math.max(-Math.PI / 3, Math.min(0, -Math.PI / 6 + y * 0.05));
             }
@@ -2953,7 +3246,7 @@ class Game {
                     const deltaX = e.clientX - previousPointerPosition.x;
                     const deltaY = e.clientY - previousPointerPosition.y;
                     
-                    if (Math.abs(e.clientX - pointerDownPos.x) > 5 || Math.abs(e.clientY - pointerDownPos.y) > 5) {
+                    if (Math.abs(e.clientX - pointerDownPos.x) > 15 || Math.abs(e.clientY - pointerDownPos.y) > 15) {
                         dragProcessed = true;
                     }
                     
@@ -3106,8 +3399,11 @@ class Game {
                 // Was a click or tap
                 if (this.state !== 'PLAYER_TURN') return;
                 
-                this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-                this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+                const finalX = (e.clientX !== undefined && e.clientX !== 0) ? e.clientX : pointerDownPos.x;
+                const finalY = (e.clientY !== undefined && e.clientY !== 0) ? e.clientY : pointerDownPos.y;
+                
+                this.mouse.x = (finalX / window.innerWidth) * 2 - 1;
+                this.mouse.y = -(finalY / window.innerHeight) * 2 + 1;
                 
                 this.raycaster.setFromCamera(this.mouse, this.camera);
                 const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -3118,7 +3414,7 @@ class Game {
                     let gridY = Math.round(target.z / TILE_SIZE);
                     
                     if (gridX >= 0 && gridX < GRID_W && gridY >= 0 && gridY < GRID_H) {
-                        this.handleGridClick(gridX, gridY, e.clientX, e.clientY);
+                        this.handleGridClick(gridX, gridY, finalX, finalY);
                     }
                 }
             }
@@ -3363,8 +3659,13 @@ class Game {
                     this.pendingAction = { type: 'ATTACK', x, y, entity: clickedEntity };
                     const cm = document.getElementById('context-menu');
                     if (cm) {
-                        cm.style.left = clientX + 'px';
-                        cm.style.top = clientY + 'px';
+                        let finalX = clientX;
+                        let finalY = clientY;
+                        // Prevent context menu from clipping off the screen edges
+                        if (finalX > window.innerWidth - 120) finalX = window.innerWidth - 120;
+                        if (finalY > window.innerHeight - 100) finalY = window.innerHeight - 100;
+                        cm.style.left = finalX + 'px';
+                        cm.style.top = finalY + 'px';
                         cm.style.display = 'flex';
                     }
                     const ct = document.getElementById('context-title');
@@ -3380,8 +3681,13 @@ class Game {
                     this.pendingAction = { type: 'MOVE', x, y };
                     const cm = document.getElementById('context-menu');
                     if (cm) {
-                        cm.style.left = clientX + 'px';
-                        cm.style.top = clientY + 'px';
+                        let finalX = clientX;
+                        let finalY = clientY;
+                        // Prevent context menu from clipping off the screen edges
+                        if (finalX > window.innerWidth - 120) finalX = window.innerWidth - 120;
+                        if (finalY > window.innerHeight - 100) finalY = window.innerHeight - 100;
+                        cm.style.left = finalX + 'px';
+                        cm.style.top = finalY + 'px';
                         cm.style.display = 'flex';
                     }
                     const ct = document.getElementById('context-title');
@@ -4046,7 +4352,20 @@ class Game {
     }
 
     animate() {
+        if (this.isDestroyed) return;
         requestAnimationFrame(() => this.animate());
+        
+        // --- FATAL NaN RECOVERY SYSTEMS ---
+        if (isNaN(this.camera.position.x) || isNaN(this.camera.position.y) || isNaN(this.camera.position.z)) {
+            console.error("CAMERA POSITION NaN CORRUPTION RECOVERED");
+            this.camera.position.set(200, 300, 200);
+            this.camera.lookAt(100, 0, 100);
+        }
+        if (isNaN(this.camera.zoom) || this.camera.zoom <= 0) {
+            console.error("CAMERA ZOOM NaN CORRUPTION RECOVERED");
+            this.camera.zoom = 1;
+            this.camera.updateProjectionMatrix();
+        }
         
         const now = Date.now();
         const deltaTime = (now - (this.lastTime || now)) / 1000;
@@ -4055,6 +4374,18 @@ class Game {
         this.updateFloatingTexts(deltaTime);
         this.updateParticles(deltaTime);
         this.updateMicroVFX(deltaTime, now * 0.001);
+        
+        // 30.3: Scrolling Fiber-Optic Cybernetic Grid / Neon lines coordinates (Shanghai skyscraper mission)
+        if (this.floorTextures && this.floorTextures.emissiveMap && window.appState && window.appState.currentMissionIndex === 2) {
+            const scrollSpeedX = 0.08 * deltaTime;
+            const scrollSpeedY = 0.04 * deltaTime;
+            this.floorTextures.emissiveMap.offset.x += scrollSpeedX;
+            this.floorTextures.emissiveMap.offset.y += scrollSpeedY;
+            if (this.floorTextures.map) {
+                this.floorTextures.map.offset.x += scrollSpeedX;
+                this.floorTextures.map.offset.y += scrollSpeedY;
+            }
+        }
         
         // Update weather overlay at 60fps
         if (this.weatherManager) {
@@ -4127,6 +4458,9 @@ class Game {
                     let targetZ = e.y * TILE_SIZE;
                     let rotXOffset = 0;
                     let rotZOffset = 0;
+
+                    if (isNaN(targetX)) targetX = e.mesh.position.x || 0;
+                    if (isNaN(targetZ)) targetZ = e.mesh.position.z || 0;
 
                     // Apply physics rebound from damage impacts
                     if (e.rebound) {
@@ -4417,20 +4751,20 @@ class Game {
                     this.gyroUIPanY *= 0.90;
                     
                     // Clamp to a safe physical bound so hud indicators don't shift offscreen
-                    const finalUIPanX = Math.max(-25, Math.min(25, this.gyroUIPanX));
-                    const finalUIPanY = Math.max(-25, Math.min(25, this.gyroUIPanY));
-                    
-                    const uiLayer = document.getElementById('ui-layer');
-                    if (uiLayer) {
-                        uiLayer.style.transform = `translate(${-finalUIPanX}px, ${-finalUIPanY}px)`;
-                    }
+                    let finalUIPanX = Math.max(-25, Math.min(25, this.gyroUIPanX));
+                    let finalUIPanY = Math.max(-25, Math.min(25, this.gyroUIPanY));
                 }
             } catch (gyroErr) {
                 console.warn("Real-time gyro polling exception", gyroErr);
             }
         }
         
-        this.renderer.render(this.scene, this.camera);
+        try {
+            this.renderer.render(this.scene, this.camera);
+        } catch (renderError) {
+            console.error("FATAL Render Error:", renderError);
+            logMessage(`[СИСТЕМНАЯ ОШИБКА ДВИЖКА: ${renderError.message}]`, 'log-combat');
+        }
         
         // Absolute clean camera recovery block right after render!
         if (shakeX !== 0 || shakeY !== 0 || shakeZ !== 0) {
@@ -4553,10 +4887,10 @@ const appState = {
                 if (el) el.style.display = (id === 'main-menu') ? 'flex' : 'none';
             });
             
-            // Clean up old game WebGL elements if they exist
+            // Clean up old game WebGL elements if they exist without destroying UI HUD layers
             try {
-                const container = document.getElementById('game-container');
-                if (container) container.innerHTML = "";
+                const webglWrap = document.getElementById('webgl-wrapper');
+                if (webglWrap) webglWrap.innerHTML = "";
             } catch (err) {}
 
             const saveExists = window.safeLocalStorage.getItem('shadowProtocolSave');
@@ -5308,27 +5642,18 @@ const appState = {
         safeSetStyle('lens-distortion', 'display', 'none');
         safeSetStyle('game-container', 'display', 'block');
         
-        if (!window.game) {
-            window.game = new Game();
-        } else {
-            const container = document.getElementById('game-container');
-            if (container && window.game.renderer && window.game.renderer.domElement) {
-                if (!container.contains(window.game.renderer.domElement)) {
-                    container.appendChild(window.game.renderer.domElement);
+        if (window.game) {
+            try {
+                window.game.isDestroyed = true;
+                if (window.game.renderer && window.game.renderer.domElement) {
+                    window.game.renderer.domElement.remove();
                 }
+            } catch (err) {
+                console.warn("Cleanup error", err);
             }
-
-            window.game.scene.children.slice().forEach(c => {
-                if(c.type !== 'HemisphereLight' && c.type !== 'DirectionalLight' && c.type !== 'GridHelper' && c !== window.game.floorTiles && c !== window.game.covers && c !== window.game.gridHelper) {
-                    window.game.scene.remove(c);
-                }
-            });
-            window.game.entities = [];
-            window.game.initGrid();
-            window.game.initEntities();
-            window.game.round = 0;
-            window.game.startPlayerTurn();
+            window.game = null;
         }
+        window.game = new Game();
     },
     loadGame: function() {
         // Stop and clean up menu audio manager to avoid overlapping / leaking AudioContext
@@ -5359,7 +5684,10 @@ const appState = {
     }
 };
 
-window.onload = () => {
+// Expose appState immediately to prevent timing window edge-cases where user taps before full onload fire
+window.appState = appState;
+
+function initAppOnLoad() {
     window.appState = appState;
     // Load persisted settings or fall back to high-fidelity defaults (AMOLED-enabled by default for Mi Mix 4 display depth!)
     const persisted = window.safeLocalStorage.getItem('shadowProtocolSettings');
@@ -5430,7 +5758,15 @@ window.onload = () => {
             db.style.backgroundPosition = `calc(50% + ${x}px) calc(50% + ${y}px)`;
         }
     });
-};
+}
+
+// Bootstrap instantly so we do not wait for background binary/image resources to load fully
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    initAppOnLoad();
+} else {
+    document.addEventListener('DOMContentLoaded', initAppOnLoad);
+    window.onload = initAppOnLoad; // fallback
+}
 </script>
 </body>
 </html>

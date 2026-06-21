@@ -25,6 +25,9 @@ import androidx.activity.ComponentActivity
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import java.io.File
 
 class MainActivity : ComponentActivity(), SensorEventListener {
@@ -54,21 +57,6 @@ class MainActivity : ComponentActivity(), SensorEventListener {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Ensure WebView Javascript/Code-Cache directory exists to prevent Chromium errors/warnings
-        try {
-            val codeCacheDir = File(cacheDir, "WebView/Default/HTTP Cache/Code Cache")
-            val jsDir = File(codeCacheDir, "js")
-            if (!jsDir.exists()) {
-                jsDir.mkdirs()
-            }
-            val wasmDir = File(codeCacheDir, "wasm")
-            if (!wasmDir.exists()) {
-                wasmDir.mkdirs()
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        
         // Initialize sensors
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         gyroscopeSensor = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
@@ -82,7 +70,9 @@ class MainActivity : ComponentActivity(), SensorEventListener {
             getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
         }
         
-        // Direct, high-performance native WebView initialization
+        requestGameAudioFocus()
+        
+        // Direct, high-performance native WebView initialization 
         val webViewInstance = WebView(this).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -169,6 +159,7 @@ class MainActivity : ComponentActivity(), SensorEventListener {
 
     override fun onResume() {
         super.onResume()
+        requestGameAudioFocus()
         if (isGyroEnabled) {
             registerGyroscope()
         }
@@ -181,6 +172,34 @@ class MainActivity : ComponentActivity(), SensorEventListener {
         unregisterGyroscope()
         webView?.onPause()
         webView?.pauseTimers()
+    }
+
+    private fun requestGameAudioFocus() {
+        try {
+            val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                    .setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_GAME)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .build()
+                    )
+                    .setOnAudioFocusChangeListener { /* handle state changes if useful */ }
+                    .build()
+                audioManager.requestAudioFocus(focusRequest)
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager.requestAudioFocus(
+                    { /* change listener */ },
+                    AudioManager.STREAM_MUSIC,
+                    AudioManager.AUDIOFOCUS_GAIN
+                )
+            }
+            Log.d("SystemOptimization", "Requested game audio focus to satisfy AppOps CONTROL_AUDIO check")
+        } catch (e: Exception) {
+            Log.e("SystemOptimization", "Failed to request audio focus: ${e.message}")
+        }
     }
 
     private fun registerGyroscope() {
